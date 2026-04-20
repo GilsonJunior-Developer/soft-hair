@@ -1,29 +1,52 @@
-
-
-# Environment & Secrets (AIOX)
+# Environment & Secrets
 .env
 .env.local
 .env.*.local
 *.key
 *.pem
 
-# Dependencies (AIOX)
+# Dependencies
 node_modules/
 node_modules
 
-# Build & Logs (AIOX)
+# Turborepo
+.turbo/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Build & Logs
 dist/
 build/
 *.log
 logs/
+*.tsbuildinfo
 
-# IDE & OS (AIOX)
+# Testing
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
+
+# Vercel
+.vercel
+
+# IDE & OS
 .DS_Store
 Thumbs.db
 .idea/
 *.swp
+.vscode/*
+!.vscode/settings.json.example
 
-# AIOX Local (AIOX)
+# AIOX Local
 .aiox-core/local/
 .claude/settings.local.json
 .aiox/install-log.txt
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+supabase/logs/
