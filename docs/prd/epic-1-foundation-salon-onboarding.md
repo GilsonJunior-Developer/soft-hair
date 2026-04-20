@@ -1,0 +1,106 @@
+# Epic 1 — Foundation & Salon Onboarding
+
+**Epic Goal:** Estabelecer a base técnica do produto (Next.js + Supabase + CI/CD) e entregar o primeiro fluxo completo de valor: o dono do salão cria sua conta, configura o salão, customiza serviços a partir do catálogo pronto, cadastra o primeiro profissional e chega a uma tela funcional de agenda (ainda vazia, pronta para Epic 2). Ao final do epic, o projeto está deployável em produção e temos um health-check operacional.
+
+## Story 1.1: Project Scaffolding & CI/CD Foundation
+
+Como **founder/dev**, quero **o projeto Next.js + Supabase + Turborepo bootstrap e com CI/CD funcional**, para que **todo desenvolvimento subsequente rode em infraestrutura confiável desde o dia 1**.
+
+### Acceptance Criteria
+
+1. Monorepo Turborepo criado com `apps/web`, `packages/db`, `packages/ui`, `docs/`
+2. `apps/web` inicializado com Next.js 15 (App Router + RSC), TypeScript estrito, Tailwind v4, shadcn/ui instalado
+3. Supabase projeto provisionado (dev + staging + prod separados) com CLI configurada localmente
+4. GitHub Actions configurado: lint (ESLint), typecheck (tsc), test (Vitest) em cada PR
+5. Deploy automático para Vercel ao merge em main (preview deploys em PRs)
+6. Rota `/healthz` retorna `{ status: "ok", version: string, timestamp }` — health-check canary
+7. README documenta setup local (≤ 5 comandos do clone ao `pnpm dev`)
+8. `.env.example` listando todas as variáveis necessárias
+
+## Story 1.2: Data Model Foundation & RLS Policies
+
+Como **founder/dev**, quero **o modelo de dados core (salão, usuário, profissional, serviço, cliente, agendamento) com RLS configurada**, para que **multi-tenancy seja garantida a nível de banco desde o início**.
+
+### Acceptance Criteria
+
+1. Schema Supabase criado com tabelas: `salons`, `users`, `professionals`, `services`, `clients`, `appointments`, `service_catalog` (catálogo global padrão)
+2. Todas as tabelas de domínio têm coluna `salon_id` (UUID, FK, NOT NULL)
+3. RLS policies ativadas: usuário só lê/escreve linhas do seu `salon_id`
+4. Policy explicita acesso ao `service_catalog` global (read-only público)
+5. Migrations versionadas em `packages/db/migrations/`
+6. Types TypeScript gerados automaticamente via Supabase CLI (`packages/db/types`)
+7. Testes de RLS: unit test validando que usuário de salão A não acessa dados de salão B
+8. Seed SQL com 200+ serviços padrão populando `service_catalog`
+
+## Story 1.3: Magic Link Authentication via WhatsApp
+
+Como **dono do salão**, quero **fazer login usando apenas meu número de WhatsApp (sem senha)**, para que **o acesso seja simples e sem fricção, alinhado ao comportamento natural do setor**.
+
+### Acceptance Criteria
+
+1. Tela de login aceita número de WhatsApp (formato BR: +55 DDD 9XXXX-XXXX)
+2. Ao submeter, sistema gera OTP de 6 dígitos válido por 10 minutos
+3. OTP é enviado via BSP WhatsApp (360dialog ou Meta Cloud API direto) usando template utility aprovado
+4. Tela de validação OTP aceita código e retorna sessão válida do Supabase Auth
+5. Sessão expira após 30 dias de inatividade
+6. Rate limit: máximo 3 solicitações de OTP por número a cada 10 minutos
+7. Logout limpa sessão e redireciona para tela de login
+8. Fallback claro se BSP falhar (mensagem de erro + "tentar de novo em X segundos")
+9. Todo o fluxo passa teste E2E (Playwright) usando mock do BSP
+
+## Story 1.4: Salon Signup & Onboarding Wizard
+
+Como **novo dono de salão**, quero **um wizard de cadastro rápido (≤ 10 min)**, para que **eu comece a usar o SoftHair sem configurar tudo do zero**.
+
+### Acceptance Criteria
+
+1. Wizard em 3 passos: (a) dados do salão (nome, cidade, CNPJ opcional); (b) seleção de categorias de serviço (cabelo, unha, barbearia, estética) — filtra catálogo padrão; (c) preços dos 10 serviços mais comuns por categoria selecionada
+2. Catálogo pré-populado: ao selecionar categoria, sistema pré-adiciona serviços padrão com preços sugeridos (editáveis)
+3. Barra de progresso mostra 1/3, 2/3, 3/3
+4. Botão "Pular e configurar depois" em cada passo (permite setup mínimo com apenas nome do salão)
+5. Ao completar, usuário é redirecionado para Dashboard "Hoje" (mesmo que vazio)
+6. Dados persistem corretamente em `salons`, `services` e relações
+7. Passa teste E2E de onboarding completo em ≤ 10 min
+
+## Story 1.5: Professional Profile Setup
+
+Como **dono do salão**, quero **cadastrar profissionais com nome, comissão e disponibilidade**, para que **agendamentos possam ser atribuídos a eles**.
+
+### Acceptance Criteria
+
+1. Tela "Profissionais" listando profissionais cadastrados (vazia no início, com CTA "Adicionar profissional")
+2. Formulário de cadastro: nome, foto opcional (upload para Supabase Storage), especialidades (multi-select do catálogo), horário de trabalho (dias + janelas), regra de comissão (% fixa OU tabela por serviço)
+3. Edição e remoção (soft delete) suportadas
+4. Profissional inativo não aparece na agenda pública
+5. Salão pode ter 1-20 profissionais (validação de limite)
+6. Foto redimensionada automaticamente para ≤ 500KB
+7. Passa teste E2E de CRUD de profissional
+
+## Story 1.6: Service Catalog Customization
+
+Como **dono do salão**, quero **customizar o catálogo de serviços (adicionar, remover, ajustar preço e duração)**, para que **o salão reflita sua realidade operacional**.
+
+### Acceptance Criteria
+
+1. Tela "Serviços" lista todos os serviços customizados do salão (seed do onboarding pré-carregado)
+2. Adicionar serviço: a partir do catálogo global (`service_catalog`) OU criação custom
+3. Cada serviço tem: nome, categoria, preço (R$), duração (minutos, múltiplos de 15), comissão customizada (opcional, sobrescreve default do profissional)
+4. Ativar/desativar serviço (serviço inativo não aparece no link público)
+5. Busca + filtro por categoria
+6. Passa teste E2E de CRUD de serviço
+
+## Story 1.7: Empty Dashboard "Hoje"
+
+Como **dono do salão**, quero **ver uma tela inicial clara mostrando o que acontecerá hoje**, para que **eu tenha contexto imediato ao abrir o sistema**.
+
+### Acceptance Criteria
+
+1. Dashboard exibe: data de hoje, próximos 3 agendamentos (vazio neste momento, placeholder friendly "Nenhum agendamento hoje ainda"), 3 métricas placeholder (agendamentos hoje, faturamento do dia, taxa de ocupação — todos zerados)
+2. Header com logo, nome do salão, avatar do usuário + menu logout
+3. Navegação lateral (desktop) ou bottom-nav (mobile) com: Hoje, Agenda, Profissionais, Serviços, Clientes (placeholder), Financeiro (placeholder), Configurações
+4. Responsive mobile-first: layout adapta em ≤ 375px
+5. PWA manifest configurado (installable)
+6. Acessibilidade: navegação por teclado + ARIA labels validados com axe-core
+7. Passa teste E2E de renderização em Chrome + Safari iOS (via Playwright)
+
+---
