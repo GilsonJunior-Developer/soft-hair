@@ -1,0 +1,16 @@
+# Normalize line endings — LF in the repo, native in the working tree
+* text=auto eol=lf
+
+# Explicit binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+
+# Generated files — avoid diff noise
+pnpm-lock.yaml linguist-generated=true
+*.min.js linguist-generated=true
+*.min.css linguist-generated=true

@@ -1,14 +1,26 @@
 {
-  "name": "project-squad",
-  "version": "0.0.0",
+  "name": "soft-hair",
+  "version": "0.1.0",
   "private": true,
-  "description": "Sistema de gestão para salão de beleza — construído com AIOX",
+  "description": "SaaS de gestão para salões de beleza brasileiros — monorepo Turborepo",
+  "packageManager": "pnpm@9.12.0",
   "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=9.0.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,yaml,yml,json}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,yaml,yml,json}\" --ignore-path .gitignore",
     "aiox:validate": "npx aiox-core@latest validate",
     "aiox:doctor": "npx aiox-core@latest doctor"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3"
   }
 }
