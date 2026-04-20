@@ -1,0 +1,45 @@
+name: ✨ Feature request
+description: Propor nova funcionalidade ou melhoria
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema a resolver
+      description: Qual dor do usuário / salão esta feature resolve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solução proposta
+    validations:
+      required: true
+
+  - type: dropdown
+    id: epic
+    attributes:
+      label: Epic alvo
+      options:
+        - Epic 1 — Foundation & Onboarding
+        - Epic 2 — Core Booking Loop
+        - Epic 3 — WhatsApp Messaging
+        - Epic 4 — Finance & NFS-e
+        - Epic 5 — Growth Loop (Indicação C2C)
+        - Fase 2 (pós-MVP)
+        - Fase 3 (long-term)
+        - Cross-cutting / não claro
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impacto esperado
+      description: Quais métricas do PRD esta feature move? (no-show, self-service %, NPS, etc.)
