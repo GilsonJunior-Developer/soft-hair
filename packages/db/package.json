@@ -1,0 +1,25 @@
+{
+  "name": "@softhair/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./types/index.ts",
+  "types": "./types/index.ts",
+  "exports": {
+    ".": "./types/index.ts",
+    "./types": "./types/index.ts"
+  },
+  "scripts": {
+    "gen:types": "cd ../.. && pnpm exec supabase gen types typescript --linked --schema public > packages/db/types/database.ts.tmp && tail -n +2 packages/db/types/database.ts.tmp > packages/db/types/database.ts && rm packages/db/types/database.ts.tmp",
+    "push": "cd ../.. && pnpm exec supabase db push",
+    "push:dry": "cd ../.. && pnpm exec supabase db push --dry-run",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.46.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4",
+    "@types/node": "^22.8.6"
+  }
+}

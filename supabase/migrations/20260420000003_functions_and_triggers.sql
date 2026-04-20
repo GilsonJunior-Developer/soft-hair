@@ -117,6 +117,29 @@ CREATE TRIGGER status_log_immutable_delete
   FOR EACH ROW EXECUTE FUNCTION public.prevent_credits_log_mutation();
 
 -- ---------------------------------------------------------
+-- Trigger: compute appointments.ends_at
+-- Replaces a GENERATED ALWAYS column (Postgres rejected int*interval
+-- as "not immutable"). Trigger fires BEFORE INSERT/UPDATE and keeps
+-- ends_at consistent with scheduled_at + duration_minutes.
+-- ---------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.compute_appointment_ends_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.ends_at := NEW.scheduled_at + (NEW.duration_minutes * INTERVAL '1 minute');
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER appointments_compute_ends_at
+  BEFORE INSERT OR UPDATE OF scheduled_at, duration_minutes ON public.appointments
+  FOR EACH ROW EXECUTE FUNCTION public.compute_appointment_ends_at();
+
+COMMENT ON FUNCTION public.compute_appointment_ends_at() IS
+  'Mantém appointments.ends_at = scheduled_at + duration_minutes. Substitui generated column (Postgres immutability constraint).';
+
+-- ---------------------------------------------------------
 -- HIGH-2 fix: Cross-salon FK consistency validation
 -- Garante que appointment.{professional,service,client}.salon_id
 -- todos apontam para o mesmo salon_id do appointment.

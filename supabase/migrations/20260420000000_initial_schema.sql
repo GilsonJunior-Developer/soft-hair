@@ -11,10 +11,12 @@ BEGIN;
 -- ---------------------------------------------------------
 -- Extensions
 -- ---------------------------------------------------------
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "citext";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- fuzzy search em clients.name
+-- NOTE: Supabase isola extensions em schema 'extensions' (fora do search_path
+-- por padrão). Usamos `gen_random_uuid()` (built-in Postgres 13+) em vez de
+-- `gen_random_uuid()` (uuid-ossp) para evitar schema prefixing.
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "citext" WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "pg_trgm" WITH SCHEMA extensions;  -- fuzzy search em clients.name
 
 -- ---------------------------------------------------------
 -- Enums (Postgres native enums — schema-level)
@@ -95,9 +97,9 @@ $$ LANGUAGE plpgsql;
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  phone_e164 CITEXT NOT NULL UNIQUE,
+  phone_e164 extensions.citext NOT NULL UNIQUE,
   name TEXT NOT NULL,
-  email CITEXT,
+  email extensions.citext,
   default_salon_id UUID, -- FK added after salons table exists
   is_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -117,7 +119,7 @@ CREATE TRIGGER users_set_updated_at
 -- Table: salons
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.salons (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
   city TEXT,
@@ -154,7 +156,7 @@ ALTER TABLE public.users
 -- Table: salon_members (junção usuário ↔ salão com papel)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.salon_members (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   role user_role NOT NULL,
@@ -168,7 +170,7 @@ COMMENT ON TABLE public.salon_members IS 'Tabela de junção user ↔ salon com 
 -- Table: service_catalog (global, read-only público)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.service_catalog (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   category TEXT NOT NULL,
   default_duration_minutes INT NOT NULL CHECK (default_duration_minutes > 0 AND default_duration_minutes % 15 = 0),
@@ -183,7 +185,7 @@ COMMENT ON TABLE public.service_catalog IS 'Catálogo global de serviços (200+ 
 -- Table: professionals
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.professionals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
@@ -221,7 +223,7 @@ CREATE TRIGGER professionals_set_updated_at
 -- Table: services (customizado por salão)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.services (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   catalog_id UUID REFERENCES public.service_catalog(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
@@ -245,9 +247,9 @@ CREATE TRIGGER services_set_updated_at
 -- Table: clients
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.clients (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
-  phone_e164 CITEXT NOT NULL,
+  phone_e164 extensions.citext NOT NULL,
   name TEXT NOT NULL,
   notes TEXT,
   credit_balance_brl NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (credit_balance_brl >= 0),
@@ -270,7 +272,7 @@ CREATE TRIGGER clients_set_updated_at
 -- Table: referral_tokens
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.referral_tokens (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   referrer_client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
   token TEXT NOT NULL UNIQUE,
@@ -285,14 +287,14 @@ COMMENT ON TABLE public.referral_tokens IS 'Token único por cliente para progra
 -- Table: appointments
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.appointments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   professional_id UUID NOT NULL REFERENCES public.professionals(id) ON DELETE RESTRICT,
   service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE RESTRICT,
   client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE RESTRICT,
   scheduled_at TIMESTAMPTZ NOT NULL,
   duration_minutes INT NOT NULL CHECK (duration_minutes > 0),
-  ends_at TIMESTAMPTZ GENERATED ALWAYS AS (scheduled_at + (duration_minutes || ' minutes')::interval) STORED,
+  ends_at TIMESTAMPTZ NOT NULL,  -- computed via trigger (migration 003)
   status appointment_status NOT NULL DEFAULT 'PENDING_CONFIRMATION',
   price_brl_original NUMERIC(10,2) NOT NULL CHECK (price_brl_original >= 0),
   price_brl_discount NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (price_brl_discount >= 0),
@@ -319,7 +321,7 @@ CREATE TRIGGER appointments_set_updated_at
 -- Table: appointment_status_log (auditoria)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.appointment_status_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   appointment_id UUID NOT NULL REFERENCES public.appointments(id) ON DELETE CASCADE,
   from_status appointment_status,
@@ -335,7 +337,7 @@ COMMENT ON TABLE public.appointment_status_log IS 'Auditoria de transições de 
 -- Table: commission_entries
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.commission_entries (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   appointment_id UUID NOT NULL UNIQUE REFERENCES public.appointments(id) ON DELETE CASCADE,
   professional_id UUID NOT NULL REFERENCES public.professionals(id) ON DELETE RESTRICT,
@@ -352,7 +354,7 @@ COMMENT ON TABLE public.commission_entries IS 'Registro de comissão por atendim
 -- Table: invoices (NFS-e)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.invoices (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   appointment_id UUID NOT NULL UNIQUE REFERENCES public.appointments(id) ON DELETE RESTRICT,
   number TEXT,
@@ -379,7 +381,7 @@ CREATE TRIGGER invoices_set_updated_at
 -- Table: referrals (indicação atribuída)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.referrals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   referral_token_id UUID NOT NULL REFERENCES public.referral_tokens(id) ON DELETE RESTRICT,
   referrer_client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE RESTRICT,
@@ -399,7 +401,7 @@ COMMENT ON TABLE public.referrals IS 'Indicação atribuída. Anti-fraude: 1 par
 -- Table: client_credits_log (ledger de créditos)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.client_credits_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
   appointment_id UUID REFERENCES public.appointments(id) ON DELETE SET NULL,
@@ -415,7 +417,7 @@ COMMENT ON TABLE public.client_credits_log IS 'Ledger append-only de créditos. 
 -- Table: whatsapp_templates (admin-only / superadmin)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.whatsapp_templates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,
   language TEXT NOT NULL DEFAULT 'pt_BR',
   category wa_template_category NOT NULL,
@@ -431,7 +433,7 @@ COMMENT ON TABLE public.whatsapp_templates IS 'Templates WhatsApp aprovados pela
 -- Table: messaging_log (todos os canais)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.messaging_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   salon_id UUID NOT NULL REFERENCES public.salons(id) ON DELETE CASCADE,
   appointment_id UUID REFERENCES public.appointments(id) ON DELETE SET NULL,
   client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
