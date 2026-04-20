@@ -1,0 +1,62 @@
+name: 🐛 Bug report
+description: Reportar comportamento incorreto ou inesperado
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar! Inclua o máximo de detalhe possível para reproduzir.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: O que aconteceu
+      description: Descrição clara e concisa do bug
+      placeholder: "Quando faço X, espero Y, mas acontece Z"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Como reproduzir
+      description: Passos para reproduzir o comportamento
+      placeholder: |
+        1. Acesse `/hoje`
+        2. Clique em "..."
+        3. Veja o erro
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severidade
+      options:
+        - critical (sistema inutilizável / dados comprometidos)
+        - high (feature central quebrada)
+        - medium (workaround existe)
+        - low (cosmético)
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Ambiente
+      placeholder: "Chrome 128 / iOS Safari / Production / Staging"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Contexto adicional
+      description: Logs, screenshots, ids de agendamento/salão, etc.
