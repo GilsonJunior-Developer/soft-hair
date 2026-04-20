@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -15,53 +15,45 @@ permissions:
   pull-requests: read
 
 jobs:
-  # Passa gracefully enquanto o scaffold Next.js (Story 1.1) não existe.
-  # Quando apps/web existir, os jobs de lint/typecheck/test/build serão
-  # ativados automaticamente pela detecção de package.json com scripts.
-  sanity:
-    name: Repo sanity
+  detect:
+    name: Detect runtime stack
     runs-on: ubuntu-latest
+    outputs:
+      has_web: ${{ steps.check.outputs.has_web }}
+      has_e2e: ${{ steps.check.outputs.has_e2e }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify required planning docs exist
+      - name: Check planning artifacts
         run: |
           set -e
           test -f docs/brief.md
           test -f docs/prd.md
           test -f docs/architecture.md
           test -f docs/front-end-spec.md
-          echo "✓ All planning docs present"
-
-      - name: Verify DB migrations exist
-        run: |
-          set -e
           test -d packages/db/migrations
-          ls packages/db/migrations/*.sql >/dev/null
-          echo "✓ DB migrations present"
+          ls packages/db/migrations/*.sql > /dev/null
+          echo "Planning artifacts OK"
 
-      - name: Detect runtime stack
-        id: detect
+      - name: Detect stack flags
+        id: check
         run: |
           if [ -f apps/web/package.json ]; then
             echo "has_web=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_web=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Report detection
-        run: |
-          echo "Web app present: ${{ steps.detect.outputs.has_web }}"
-          if [ "${{ steps.detect.outputs.has_web }}" = "false" ]; then
-            echo "Skipping lint/test/build — scaffold pending Story 1.1"
+          if [ -f apps/web/playwright.config.ts ]; then
+            echo "has_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_e2e=false" >> "$GITHUB_OUTPUT"
           fi
 
   lint-test-build:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
-    needs: sanity
-    # Só roda quando apps/web for scaffolded (Story 1.1)
-    if: ${{ hashFiles('apps/web/package.json') != '' }}
+    needs: detect
+    if: needs.detect.outputs.has_web == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -74,27 +66,17 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Unit + integration tests
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
-
-  # Placeholder para futuro — ativado quando e2e tests existirem
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    needs: lint-test-build
-    if: ${{ hashFiles('apps/web/playwright.config.ts') != '' }}
+    needs: [detect, lint-test-build]
+    if: needs.detect.outputs.has_e2e == 'true'
     steps:
       - uses: actions/checkout@v4
 
