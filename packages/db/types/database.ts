@@ -942,6 +942,30 @@ export type Database = {
         Returns: boolean
       }
       cleanup_expired_referral_tokens: { Args: never; Returns: number }
+      create_salon_bootstrap: {
+        Args: { p_city?: string; p_cnpj?: string; p_name: string }
+        Returns: {
+          city: string | null
+          cnpj: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          name: string
+          owner_user_id: string
+          settings_jsonb: Json
+          slug: string
+          subscription_plan: string
+          subscription_status: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "salons"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       current_user_salon_ids: { Args: never; Returns: string[] }
       is_salon_owner: { Args: { p_salon_id: string }; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
@@ -949,6 +973,8 @@ export type Database = {
         Args: { p_month?: number; p_salon_id: string; p_year?: number }
         Returns: number
       }
+      slugify: { Args: { input: string }; Returns: string }
+      unaccent_portuguese: { Args: { input: string }; Returns: string }
     }
     Enums: {
       appointment_source: "PUBLIC_LINK" | "MANUAL_BY_STAFF" | "REFERRAL"
