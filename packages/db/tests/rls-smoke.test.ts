@@ -23,15 +23,22 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // --- env loader ---
-// We load .env.local manually (workspace test context doesn't inherit Next.js loading)
+// We load .env.local manually (workspace test context doesn't inherit Next.js loading).
+// In CI, .env.local doesn't exist — tests gracefully SKIP instead of failing.
 function loadEnv() {
   const envPath = resolve(__dirname, '../../../.env.local');
-  const content = readFileSync(envPath, 'utf8');
-  for (const line of content.split(/\r?\n/)) {
-    const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-    if (match && match[1] && !process.env[match[1]]) {
-      process.env[match[1]] = (match[2] ?? '').trim();
+  try {
+    const content = readFileSync(envPath, 'utf8');
+    for (const line of content.split(/\r?\n/)) {
+      const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (match && match[1] && !process.env[match[1]]) {
+        process.env[match[1]] = (match[2] ?? '').trim();
+      }
     }
+  } catch (err: unknown) {
+    // .env.local not found — expected in CI. Tests will skip.
+    const code = (err as { code?: string } | null)?.code;
+    if (code !== 'ENOENT') throw err;
   }
 }
 loadEnv();
@@ -40,21 +47,28 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !anonKey || !serviceKey) {
-  throw new Error(
-    'Missing env vars. Expected NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY + SUPABASE_SERVICE_ROLE_KEY in .env.local',
+const hasCredentials = !!(supabaseUrl && anonKey && serviceKey);
+
+if (!hasCredentials) {
+  console.warn(
+    '[rls-smoke] Skipping tests: missing Supabase credentials. Run locally with .env.local populated.',
   );
 }
 
-// Admin client — bypasses RLS (for schema introspection)
-const admin = createClient(supabaseUrl, serviceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+// Admin client — bypasses RLS (for schema introspection).
+// When credentials missing, use placeholder (test suites skip anyway).
+const admin = hasCredentials
+  ? createClient(supabaseUrl!, serviceKey!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : (null as unknown as ReturnType<typeof createClient>);
 
-// Anon client — respects RLS (simulates unauthenticated browser request)
-const anon = createClient(supabaseUrl, anonKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+// Anon client — respects RLS (simulates unauthenticated browser request).
+const anon = hasCredentials
+  ? createClient(supabaseUrl!, anonKey!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : (null as unknown as ReturnType<typeof createClient>);
 
 // Domain tables that MUST have RLS enabled + at least 1 policy
 const DOMAIN_TABLES = [
@@ -77,7 +91,7 @@ const DOMAIN_TABLES = [
 // Public-read tables (RLS enabled but allows anon SELECT)
 const PUBLIC_READ_TABLES = ['service_catalog', 'whatsapp_templates'] as const;
 
-describe('Schema introspection via service_role', () => {
+describe.skipIf(!hasCredentials)('Schema introspection via service_role', () => {
   it('all domain tables have RLS enabled', async () => {
     for (const table of DOMAIN_TABLES) {
       const { data, error } = await admin
@@ -92,7 +106,7 @@ describe('Schema introspection via service_role', () => {
   });
 });
 
-describe('Service catalog — public read (anon access)', () => {
+describe.skipIf(!hasCredentials)('Service catalog — public read (anon access)', () => {
   it('anon can read service_catalog (no auth required)', async () => {
     const { data, error } = await anon
       .from('service_catalog')
@@ -117,7 +131,7 @@ describe('Service catalog — public read (anon access)', () => {
   });
 });
 
-describe('WhatsApp templates — authenticated read only', () => {
+describe.skipIf(!hasCredentials)('WhatsApp templates — authenticated read only', () => {
   it('anon CANNOT read whatsapp_templates (requires auth.uid())', async () => {
     const { data, error } = await anon
       .from('whatsapp_templates')
@@ -130,7 +144,7 @@ describe('WhatsApp templates — authenticated read only', () => {
   });
 });
 
-describe('Domain tables — anon blocked', () => {
+describe.skipIf(!hasCredentials)('Domain tables — anon blocked', () => {
   for (const table of DOMAIN_TABLES) {
     it(`anon SELECT on ${table} returns empty/blocked (RLS filters by auth.uid())`, async () => {
       const { data, error } = await (anon as unknown as { from: (t: string) => { select: (s: string) => { limit: (n: number) => Promise<{ data: unknown[] | null; error: unknown }> } } })
@@ -146,7 +160,7 @@ describe('Domain tables — anon blocked', () => {
   }
 });
 
-describe('Seed data presence (via service_role)', () => {
+describe.skipIf(!hasCredentials)('Seed data presence (via service_role)', () => {
   it('service_catalog has ≥ 20 entries (from seed migration)', async () => {
     const { count, error } = await admin
       .from('service_catalog')
