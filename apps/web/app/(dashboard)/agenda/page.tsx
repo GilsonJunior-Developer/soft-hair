@@ -63,14 +63,42 @@ export default async function AgendaPage({
     .select('id, scheduled_at, professional_id, salon_id, status, deleted_at')
     .order('created_at', { ascending: false })
     .limit(3);
+
+  // Test 3 variants of professional filter to pinpoint `.eq` issue:
+  const testProId = professionalId ?? null;
+  const eqTestRes = testProId
+    ? await supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .eq('professional_id', testProId)
+    : null;
+  const inTestRes = testProId
+    ? await supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .in('professional_id', [testProId])
+    : null;
+  const filterTestRes = testProId
+    ? await supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .filter('professional_id', 'eq', testProId)
+    : null;
+
   const debugInfo = {
     authUid: authRes.data.user?.id ?? 'null',
+    profFilterRaw: JSON.stringify(testProId),
+    profFilterLen: testProId?.length ?? 0,
     countNoFilter: countNoFilterRes.count ?? 'err:' + countNoFilterRes.error?.message,
     countInWindow: countInWindowRes.count ?? 'err:' + countInWindowRes.error?.message,
+    eqTest: eqTestRes?.count ?? (eqTestRes?.error?.message ?? 'skipped'),
+    inTest: inTestRes?.count ?? (inTestRes?.error?.message ?? 'skipped'),
+    filterTest: filterTestRes?.count ?? (filterTestRes?.error?.message ?? 'skipped'),
     rawSample: rawAllRes.data?.map((a) => ({
       id: (a.id as string).slice(0, 8),
       t: a.scheduled_at,
-      p: (a.professional_id as string).slice(0, 8),
+      pFull: a.professional_id,
+      pMatch: a.professional_id === testProId,
       s: (a.salon_id as string).slice(0, 8),
       st: a.status,
     })) ?? `err:${rawAllRes.error?.message}`,
@@ -104,12 +132,16 @@ export default async function AgendaPage({
             wordBreak: 'break-all',
           }}
         >
-          {`[DEBUG /agenda build=${process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local-dev'}] view=${view} profFilter=${professionalId ?? 'all'} apptCount=${appointments.length} proCount=${professionals.length} svcCount=${services.length}
+          {`[DEBUG /agenda build=${process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local-dev'}] view=${view} apptCount=${appointments.length} proCount=${professionals.length} svcCount=${services.length}
 window: ${window.from.toISOString()} → ${window.to.toISOString()}
 authUid: ${debugInfo.authUid}
-countNoFilter (all appts user can SELECT): ${debugInfo.countNoFilter}
-countInWindow (just window, no prof filter): ${debugInfo.countInWindow}
-raw sample (top 3 by created_at): ${JSON.stringify(debugInfo.rawSample)}`}
+profFilterRaw: ${debugInfo.profFilterRaw} (len=${debugInfo.profFilterLen})
+countNoFilter: ${debugInfo.countNoFilter}
+countInWindow: ${debugInfo.countInWindow}
+eqTest (.eq): ${debugInfo.eqTest}
+inTest (.in): ${debugInfo.inTest}
+filterTest (.filter): ${debugInfo.filterTest}
+raw sample: ${JSON.stringify(debugInfo.rawSample)}`}
         </pre>
       )}
       <AgendaPageShell
