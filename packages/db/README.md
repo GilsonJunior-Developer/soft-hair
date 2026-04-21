@@ -1,10 +1,12 @@
 # packages/db — SoftHair Database
 
 **Stack:** Supabase (Postgres 15) + RLS multi-tenant
-**Versão:** v0.2.0 (Story 1.2 — aplicado em softhair-dev)
+**Versão:** v0.2.1 (Story 1.2 applied; scope change 2026-04-21)
 **Owner:** @data-engineer (Dara)
 
 Estado de banco do SoftHair — migrations, RLS, types TypeScript gerados, smoke tests.
+
+> ⚠️ **SCOPE CHANGE 2026-04-21:** Tables `whatsapp_templates`, `messaging_log`, `invoices` e o seed de WA templates são **dormant até Phase 2** (WhatsApp + NFS-e saíram do MVP). Schema preservado sem cost/harm. Ver [change record](../../docs/change-records/2026-04-21-mvp-scope-reduction.md).
 
 ---
 

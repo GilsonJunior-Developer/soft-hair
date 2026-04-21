@@ -1,6 +1,8 @@
 # Epic 2 — Core Booking Loop
 
-**Epic Goal:** Habilitar o salão a receber e gerenciar agendamentos de fim a fim. Salão tem agenda visual funcional; cliente final consegue agendar via link público apenas com telefone; histórico do cliente é mantido. Ao fim do epic, os design-partners podem operar (mesmo que a confirmação WhatsApp ainda seja manual — Epic 3 automatiza).
+> ⚠️ **SCOPE CHANGE 2026-04-21:** WhatsApp references nesta epic precisam ler como **email OR manual** (Epic 3 WhatsApp foi movido para Phase 2). Ver [change record](../change-records/2026-04-21-mvp-scope-reduction.md).
+
+**Epic Goal (revised):** Habilitar o salão a receber e gerenciar agendamentos de fim a fim. Salão tem agenda visual funcional; cliente final consegue agendar via link público apenas com telefone + email; histórico do cliente é mantido. Ao fim do epic, os design-partners podem operar — confirmação é feita manualmente pelo salão via UI (WhatsApp automático vem em Phase 2).
 
 ## Story 2.1: Visual Calendar/Agenda View
 
@@ -93,7 +95,7 @@ Como **cliente final**, quero **cancelar ou reagendar meu agendamento via link �
 
 ### Acceptance Criteria
 
-1. Cliente recebe URL única `softhair.com.br/agendamento/{token}` após confirmar (via WhatsApp — integração completa em Epic 3; nesta story, URL pode ser testada manualmente)
+1. Cliente recebe URL única `softhair.com.br/agendamento/{token}` após confirmar (**via email** — Phase 2 retomará entrega por WhatsApp quando Epic 3 voltar. Para MVP, email é o canal primário OR teste manual)
 2. Token é JWT assinado com validade até data do agendamento
 3. Página mostra resumo do agendamento + ações: "Cancelar" e "Reagendar"
 4. Janela de cancelamento configurável pelo salão (default 24h antes)

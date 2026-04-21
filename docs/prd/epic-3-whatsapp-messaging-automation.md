@@ -1,6 +1,8 @@
 # Epic 3 — WhatsApp Messaging Automation
 
-**Epic Goal:** Automatizar o ciclo de comunicação com cliente via WhatsApp Business API oficial + Chatwoot, eliminando o trabalho manual da recepção e reduzindo no-show. Ao fim do epic, confirmações e lembretes acontecem sem intervenção humana, e o status do agendamento é atualizado automaticamente com base na resposta do cliente.
+> ⏸️ **DEFERRED TO PHASE 2 — 2026-04-21 scope change.** Esta epic inteira foi movida para Phase 2 (pós-PMF validado com design-partners). Stories preservadas intactas para retomada futura. Ver [change record](../change-records/2026-04-21-mvp-scope-reduction.md).
+
+**Epic Goal (Phase 2):** Automatizar o ciclo de comunicação com cliente via WhatsApp Business API oficial + Chatwoot, eliminando o trabalho manual da recepção e reduzindo no-show. Ao fim do epic, confirmações e lembretes acontecem sem intervenção humana, e o status do agendamento é atualizado automaticamente com base na resposta do cliente.
 
 ## Story 3.1: Chatwoot Self-Hosted Setup
 
