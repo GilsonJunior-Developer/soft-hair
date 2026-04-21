@@ -85,6 +85,21 @@ export default async function AgendaPage({
         .filter('professional_id', 'eq', testProId)
     : null;
 
+  // Exact replica of fetchAgendaWindow query, inline in the Server Component
+  let inlineQuery = supabase
+    .from('appointments')
+    .select(
+      'id, scheduled_at, ends_at, status, price_brl_final, notes, client_id, professional_id, service_id',
+    )
+    .gte('scheduled_at', window.from.toISOString())
+    .lt('scheduled_at', window.to.toISOString())
+    .is('deleted_at', null)
+    .order('scheduled_at');
+  if (testProId) {
+    inlineQuery = inlineQuery.eq('professional_id', testProId);
+  }
+  const inlineRes = await inlineQuery;
+
   const debugInfo = {
     authUid: authRes.data.user?.id ?? 'null',
     profFilterRaw: JSON.stringify(testProId),
@@ -94,6 +109,7 @@ export default async function AgendaPage({
     eqTest: eqTestRes?.count ?? (eqTestRes?.error?.message ?? 'skipped'),
     inTest: inTestRes?.count ?? (inTestRes?.error?.message ?? 'skipped'),
     filterTest: filterTestRes?.count ?? (filterTestRes?.error?.message ?? 'skipped'),
+    inlineReplica: inlineRes.data?.length ?? `err:${inlineRes.error?.message}`,
     rawSample: rawAllRes.data?.map((a) => ({
       id: (a.id as string).slice(0, 8),
       t: a.scheduled_at,
@@ -141,6 +157,7 @@ countInWindow: ${debugInfo.countInWindow}
 eqTest (.eq): ${debugInfo.eqTest}
 inTest (.in): ${debugInfo.inTest}
 filterTest (.filter): ${debugInfo.filterTest}
+inlineReplica (exact same query as fetchAgendaWindow): ${debugInfo.inlineReplica}
 raw sample: ${JSON.stringify(debugInfo.rawSample)}`}
         </pre>
       )}
