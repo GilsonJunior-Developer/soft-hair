@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatInTimeZone } from 'date-fns-tz';
+import { ptBR } from 'date-fns/locale';
 import {
   appointmentToGridStyle,
   GRID_END_HOUR,
@@ -52,7 +53,7 @@ export function AgendaDay({
     new Date(dateISO),
     BR_TIMEZONE,
     "EEEE, dd 'de' MMMM",
-    { locale: { code: 'pt-BR' } as never },
+    { locale: ptBR },
   );
 
   return (

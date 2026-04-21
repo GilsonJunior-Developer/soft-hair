@@ -2,6 +2,7 @@
 
 import { addDays } from 'date-fns';
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
+import { ptBR } from 'date-fns/locale';
 import { BR_TIMEZONE } from '@/lib/agenda/date-range';
 import { appointmentToGridStyle, TOTAL_SLOTS } from '@/lib/agenda/position';
 import type { AgendaAppointment } from '@/app/(dashboard)/agenda/actions';
@@ -55,9 +56,7 @@ export function AgendaWeek({
                   className="capitalize"
                   style={{ color: 'var(--color-text-muted)' }}
                 >
-                  {formatInTimeZone(d, BR_TIMEZONE, 'EEE', {
-                    locale: { code: 'pt-BR' } as never,
-                  })}
+                  {formatInTimeZone(d, BR_TIMEZONE, 'EEE', { locale: ptBR })}
                 </span>
                 <span
                   className="text-sm font-semibold"
