@@ -1,11 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    typedRoutes: true,
-  },
-  // Transpile workspace packages when added (packages/ui, packages/core, etc.)
-  transpilePackages: [],
+  // Transpile workspace packages
+  transpilePackages: ['@softhair/db'],
 };
 
 export default nextConfig;

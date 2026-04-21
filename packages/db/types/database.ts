@@ -856,31 +856,31 @@ export type Database = {
         Row: {
           created_at: string
           default_salon_id: string | null
-          email: string | null
+          email: string
           id: string
           is_superadmin: boolean
           name: string
-          phone_e164: string
+          phone_e164: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           default_salon_id?: string | null
-          email?: string | null
+          email: string
           id: string
           is_superadmin?: boolean
           name: string
-          phone_e164: string
+          phone_e164?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           default_salon_id?: string | null
-          email?: string | null
+          email?: string
           id?: string
           is_superadmin?: boolean
           name?: string
-          phone_e164?: string
+          phone_e164?: string | null
           updated_at?: string
         }
         Relationships: [
