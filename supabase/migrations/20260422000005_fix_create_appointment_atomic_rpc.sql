@@ -1,26 +1,19 @@
 -- =========================================================
--- SoftHair — create_appointment_atomic RPC
--- Migration: 20260422000002_create_appointment_atomic_rpc
--- Author: Dex (Dev Agent) — Story 2.2 Task 2
+-- SoftHair — HOTFIX: create_appointment_atomic RPC
+-- Migration: 20260422000005_fix_create_appointment_atomic_rpc
+-- Author: Dex (Dev Agent) — Sprint 2.A hotfix
 -- Generated: 2026-04-21
--- Context: Race-safe appointment creation with optional client upsert.
---          Delegates conflict detection to EXCLUDE constraint
---          (migration 20260422000001). Catches SQLSTATE 23P01 and
---          returns a structured error that the Server Action translates.
+-- Context: Previous version (migration ..._00003) used
+--          `gen_random_bytes(16)` from pgcrypto, which in Supabase lives
+--          under the `extensions` schema and is not reachable from a
+--          SECURITY DEFINER function with search_path=public.
+-- Fix: use `gen_random_uuid()` (Postgres built-in) and strip dashes for
+--      a 32-char hex token — same entropy (128 bits), zero extension dep.
+-- Idempotent: CREATE OR REPLACE.
 -- =========================================================
 
 BEGIN;
 
--- ---------------------------------------------------------
--- RPC: create_appointment_atomic
--- ---------------------------------------------------------
--- Inserts appointment + optionally upserts client (by phone or email within salon).
--- Returns the created appointment on success.
--- Raises an exception with specific SQLSTATE for the caller to catch:
---   - P0001 'conflict': time overlaps another active appointment
---   - P0001 'auth_required': no auth.uid() (shouldn't happen via Server Action)
---   - P0001 'no_salon': user has no default salon
---   - P0001 'service_not_found' / 'professional_not_found' / 'client_not_found'
 CREATE OR REPLACE FUNCTION public.create_appointment_atomic(
   p_professional_id UUID,
   p_service_id UUID,
@@ -57,7 +50,6 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'no_salon', ERRCODE = 'P0001';
   END IF;
 
-  -- Fetch service (must belong to salon)
   SELECT id, duration_minutes, price_brl
     INTO v_service
     FROM public.services
@@ -68,7 +60,6 @@ BEGIN
 
   v_ends_at := p_scheduled_at + (v_service.duration_minutes || ' minutes')::INTERVAL;
 
-  -- Verify professional belongs to same salon
   IF NOT EXISTS (
     SELECT 1 FROM public.professionals
      WHERE id = p_professional_id AND salon_id = v_salon_id AND deleted_at IS NULL
@@ -76,7 +67,6 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'professional_not_found', ERRCODE = 'P0001';
   END IF;
 
-  -- Client: use existing id OR upsert by phone_e164 within salon
   IF p_client_id IS NOT NULL THEN
     IF NOT EXISTS (
       SELECT 1 FROM public.clients
@@ -89,7 +79,6 @@ BEGIN
     IF p_client_name IS NULL OR p_client_phone IS NULL THEN
       RAISE EXCEPTION USING MESSAGE = 'client_data_required', ERRCODE = 'P0001';
     END IF;
-    -- Upsert by (salon_id, phone_e164)
     INSERT INTO public.clients (salon_id, name, phone_e164, email)
     VALUES (v_salon_id, p_client_name, p_client_phone, p_client_email)
     ON CONFLICT (salon_id, phone_e164) DO UPDATE
@@ -99,13 +88,9 @@ BEGIN
     RETURNING id INTO v_client_id;
   END IF;
 
-  -- Cancel token — UUID hex (32 chars, 128 bits of entropy).
-  -- NOTE: gen_random_bytes() is in extensions.pgcrypto; gen_random_uuid()
-  -- is Postgres built-in and works out of the box in Supabase.
+  -- FIX: use built-in gen_random_uuid() instead of extensions.gen_random_bytes()
   v_cancel_token := replace(gen_random_uuid()::text, '-', '');
 
-  -- Insert appointment. EXCLUDE constraint handles race; we let
-  -- SQLSTATE 23P01 bubble up so Server Action translates it.
   INSERT INTO public.appointments (
     salon_id, professional_id, service_id, client_id,
     scheduled_at, duration_minutes, ends_at,
@@ -126,10 +111,5 @@ $$;
 GRANT EXECUTE ON FUNCTION public.create_appointment_atomic(
   UUID, UUID, TIMESTAMPTZ, UUID, TEXT, TEXT, TEXT, TEXT, TEXT
 ) TO authenticated;
-
-COMMENT ON FUNCTION public.create_appointment_atomic IS
-  'Atomic appointment creation with race-safe conflict detection via EXCLUDE constraint.
-   Upserts client by (salon_id, phone_e164) when client_id is null.
-   Raises P0001 with descriptive message on domain errors; SQLSTATE 23P01 on time conflict.';
 
 COMMIT;
