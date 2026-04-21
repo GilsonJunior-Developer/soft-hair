@@ -1,6 +1,8 @@
 # SoftHair Fullstack Architecture Document
 
-**Versão:** 1.1 (DRAFT — ADRs confirmados)
+**Versão:** 1.2 (SCOPE CHANGE — WhatsApp + NFS-e movidos para Phase 2)
+
+> ⚠️ **SCOPE CHANGE — 2026-04-21:** ADR-0001 (WhatsApp) e ADR-0002 (NFS-e) foram **diferidos para Phase 2**. Chatwoot removido do stack MVP. Auth mudou para email magic link (Supabase nativo). Ver [docs/change-records/2026-04-21-mvp-scope-reduction.md](./change-records/2026-04-21-mvp-scope-reduction.md).
 **Data:** 2026-04-20
 **Autor:** Aria (Architect Agent)
 **Status:** Draft para review do founder; ADRs marcados "to verify" precisam validação
@@ -190,8 +192,9 @@ Esta é a seleção DEFINITIVA. Todas as stories devem usar exatamente essas ver
 | **Realtime** | Supabase Realtime | 2.x | Updates live da agenda | Postgres CDC via WebSocket |
 | **Job Queue/Scheduler** | Inngest | 3.x | Jobs agendados + event-driven | Serverless, retries built-in |
 | **Messaging Orchestrator** | Chatwoot | 3.x | Self-hosted omnichannel | Open-source, REST API, webhooks |
-| **WhatsApp API** | Meta Cloud API | Graph API v20+ | ADR-0001 ✅ ACCEPTED | Menor custo, SDK oficial, sem BSP intermediário |
-| **NFS-e Provider** | Nuvem Fiscal | REST API v1 | ADR-0002 ✅ ACCEPTED | Cobertura ampla, OAuth 2.0, DX moderna |
+| **WhatsApp API** | ~~Meta Cloud API~~ | — | ADR-0001 ⏸️ DEFERRED (Phase 2) | Removido do MVP 2026-04-21 |
+| **NFS-e Provider** | ~~Nuvem Fiscal~~ | — | ADR-0002 ⏸️ DEFERRED (Phase 2) | Removido do MVP 2026-04-21 |
+| **Email (auth + transactional)** | Supabase Auth nativo | — | MVP | Magic link via `signInWithOtp`. Transactional provider (Resend/Postmark) — decisão pós-MVP |
 | **Payment (assinatura SaaS)** | Stripe OR Asaas | latest | Cobrança do salão | A decidir — Asaas melhor para BR |
 | **Unit Testing** | Vitest | 2.x | Testes unit + integration | Rápido, compatível com Jest |
 | **E2E Testing** | Playwright | 1.4x | Testes end-to-end | Cross-browser, mobile emulation |
@@ -1132,7 +1135,8 @@ ADRs completos ficam em `docs/architecture/decisions/`. Resumo aqui:
 
 ### ADR-0001: WhatsApp BSP
 
-**Status:** ACCEPTED (2026-04-20 — aprovado pelo founder)
+**Status:** ~~ACCEPTED~~ **DEFERRED to Phase 2** (2026-04-21 — scope reduction founder decision)
+**Original status:** ACCEPTED (2026-04-20 — aprovado pelo founder)
 **Decisão:** **Meta Cloud API direto** para MVP.
 **Rationale:**
 - Menor custo por mensagem (sem markup de BSP intermediário)
@@ -1149,7 +1153,8 @@ ADRs completos ficam em `docs/architecture/decisions/`. Resumo aqui:
 
 ### ADR-0002: NFS-e Provider
 
-**Status:** ACCEPTED (2026-04-20 — aprovado pelo founder)
+**Status:** ~~ACCEPTED~~ **DEFERRED to Phase 2** (2026-04-21 — scope reduction founder decision)
+**Original status:** ACCEPTED (2026-04-20 — aprovado pelo founder)
 **Decisão:** **Nuvem Fiscal**.
 **Rationale:**
 - API REST moderna com docs em PT-BR

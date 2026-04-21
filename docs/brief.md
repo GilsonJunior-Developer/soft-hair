@@ -2,9 +2,11 @@
 
 **Data:** 2026-04-20
 **Autor:** Atlas (Analyst Agent)
-**Versão:** 1.0
-**Status:** Aprovado para handoff ao @pm
+**Versão:** 1.1 (SCOPE CHANGE 2026-04-21)
+**Status:** Active (MVP reduzido)
 **Template:** project-brief v2.0
+
+> ⚠️ **SCOPE CHANGE 2026-04-21:** MVP foi reduzido — WhatsApp automation e NFS-e integration foram **movidos para Phase 2** (retomados após PMF validado com design-partners). Differentiators atualizados abaixo. Pricing revisado para R$ 40-60/mês. Ver [docs/change-records/2026-04-21-mvp-scope-reduction.md](./change-records/2026-04-21-mvp-scope-reduction.md).
 
 ---
 
