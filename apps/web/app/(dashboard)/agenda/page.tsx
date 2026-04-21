@@ -104,7 +104,7 @@ export default async function AgendaPage({
             wordBreak: 'break-all',
           }}
         >
-          {`[DEBUG /agenda] view=${view} profFilter=${professionalId ?? 'all'} apptCount=${appointments.length} proCount=${professionals.length} svcCount=${services.length}
+          {`[DEBUG /agenda build=${process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local-dev'}] view=${view} profFilter=${professionalId ?? 'all'} apptCount=${appointments.length} proCount=${professionals.length} svcCount=${services.length}
 window: ${window.from.toISOString()} → ${window.to.toISOString()}
 authUid: ${debugInfo.authUid}
 countNoFilter (all appts user can SELECT): ${debugInfo.countNoFilter}
