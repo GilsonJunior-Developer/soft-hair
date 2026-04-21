@@ -31,8 +31,8 @@ jobs:
           test -f docs/prd.md
           test -f docs/architecture.md
           test -f docs/front-end-spec.md
-          test -d packages/db/migrations
-          ls packages/db/migrations/*.sql > /dev/null
+          test -d supabase/migrations
+          ls supabase/migrations/*.sql > /dev/null
           echo "Planning artifacts OK"
 
       - name: Detect stack flags
