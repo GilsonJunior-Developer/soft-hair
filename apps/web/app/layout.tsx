@@ -20,12 +20,20 @@ export const metadata: Metadata = {
     template: '%s · SoftHair',
   },
   description:
-    'SaaS de gestão para salões de beleza brasileiros. Agenda, WhatsApp automático, comissão e NFS-e em um só lugar.',
+    'SaaS de gestão para salões de beleza brasileiros. Agenda, profissionais, serviços e financeiro em um só lugar.',
   applicationName: 'SoftHair',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'SoftHair',
+    statusBarStyle: 'default',
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
-    icon: '/icons/icon-192.png',
-    apple: '/icons/icon-192.png',
+    icon: [{ url: '/icons/icon-192.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/icons/icon-192.svg', type: 'image/svg+xml' }],
   },
 };
 
@@ -33,6 +41,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
+  viewportFit: 'cover',
   themeColor: '#7C3AED',
   colorScheme: 'light',
 };

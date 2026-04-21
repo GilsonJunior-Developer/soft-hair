@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { SidebarNav } from '@/components/layout/sidebar-nav';
+import { BottomNav } from '@/components/layout/bottom-nav';
+import { UserMenu } from '@/components/layout/user-menu';
 
-/**
- * Minimal dashboard layout.
- * Full sidebar/bottom-nav organism comes in Story 1.7.
- * For now: auth guard + simple header with logo + logout.
- */
+type MembershipRow = {
+  salon_id: string;
+  role: string;
+  salons: { name: string; slug: string } | null;
+};
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -22,67 +25,66 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // Check salon membership — if none, onboarding wasn't completed
   const { data: membership } = await supabase
     .from('salon_members')
     .select('salon_id, role, salons!inner(name, slug)')
     .eq('user_id', user.id)
     .limit(1)
-    .maybeSingle();
+    .maybeSingle<MembershipRow>();
 
   if (!membership) {
     redirect('/onboarding');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const salonName = (membership as any).salons?.name ?? 'Salão';
+  const salonName = membership.salons?.name ?? 'Salão';
+  const email = user.email ?? '';
 
   return (
-    <div className="flex min-h-screen flex-col [background-color:var(--color-bg)]">
-      <header
-        className="flex items-center justify-between border-b px-6 py-4"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-surface)',
-        }}
-      >
-        <Link
-          href="/hoje"
-          className="flex items-center gap-2 transition-opacity hover:opacity-80"
+    <div className="flex min-h-screen [background-color:var(--color-bg)]">
+      <SidebarNav />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header
+          className="sticky top-0 z-30 flex h-14 items-center justify-between border-b px-4 lg:px-8"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-border)',
+          }}
         >
-          <span
-            aria-hidden="true"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-white"
-            style={{ backgroundColor: 'var(--color-accent-600)' }}
-          >
-            SH
-          </span>
-          <span className="text-sm font-medium [color:var(--color-text-strong)]">
-            {salonName}
-          </span>
-        </Link>
-
-        <nav className="flex items-center gap-4 text-sm">
-          <Link href="/hoje" className="[color:var(--color-text-muted)] hover:[color:var(--color-text-strong)]">
-            Hoje
-          </Link>
-          <Link href="/profissionais" className="[color:var(--color-text-muted)] hover:[color:var(--color-text-strong)]">
-            Profissionais
-          </Link>
-          <form action="/api/auth/logout" method="post">
-            <button
-              type="submit"
-              className="text-xs underline [color:var(--color-text-muted)] hover:[color:var(--color-text-strong)]"
+          <div className="flex items-center gap-2 lg:hidden">
+            <span
+              aria-hidden
+              className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white"
+              style={{ backgroundColor: 'var(--color-accent-600)' }}
             >
-              Sair
-            </button>
-          </form>
-        </nav>
-      </header>
+              SH
+            </span>
+            <span
+              className="text-sm font-medium"
+              style={{ color: 'var(--color-text-strong)' }}
+            >
+              {salonName}
+            </span>
+          </div>
 
-      <main className="flex-1 px-6 py-8">
-        <div className="mx-auto w-full max-w-5xl">{children}</div>
-      </main>
+          <div className="hidden lg:block">
+            <span
+              className="text-sm"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              {salonName}
+            </span>
+          </div>
+
+          <UserMenu email={email} salonName={salonName} />
+        </header>
+
+        <main className="flex-1 px-4 py-6 pb-24 lg:px-8 lg:py-8 lg:pb-8">
+          <div className="mx-auto w-full max-w-[1280px]">{children}</div>
+        </main>
+      </div>
+
+      <BottomNav />
     </div>
   );
 }
