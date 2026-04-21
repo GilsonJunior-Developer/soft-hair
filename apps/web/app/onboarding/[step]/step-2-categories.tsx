@@ -48,7 +48,7 @@ export function Step2Categories() {
         return;
       }
       if (action === 'next' && selected.size > 0) {
-        router.push('/onboarding/step-3');
+        router.push('/onboarding/3');
       } else {
         await finishOnboarding();
       }
