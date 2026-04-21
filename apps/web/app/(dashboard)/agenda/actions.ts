@@ -36,16 +36,16 @@ export type AgendaProfessional = {
   slug: string;
 };
 
-type AppointmentRow = {
+type AppointmentFlatRow = {
   id: string;
   scheduled_at: string;
   ends_at: string;
   status: AppointmentStatus;
   price_brl_final: number | string;
   notes: string | null;
-  clients: { id: string; name: string; phone_e164: string } | null;
-  professionals: { id: string; name: string } | null;
-  services: { id: string; name: string; duration_minutes: number } | null;
+  client_id: string;
+  professional_id: string;
+  service_id: string;
 };
 
 export async function fetchAgendaWindow({
@@ -62,6 +62,26 @@ export async function fetchAgendaWindow({
 }> {
   const supabase = await createClient();
 
+  // Fetch appointments flat (no PostgREST JOIN — more defensive against
+  // introspection edge cases; resolve relations below with targeted IN queries).
+  let query = supabase
+    .from('appointments')
+    .select(
+      'id, scheduled_at, ends_at, status, price_brl_final, notes, client_id, professional_id, service_id',
+    )
+    .gte('scheduled_at', from.toISOString())
+    .lt('scheduled_at', to.toISOString())
+    .is('deleted_at', null)
+    .order('scheduled_at');
+
+  if (professionalId) {
+    query = query.eq('professional_id', professionalId);
+  }
+
+  const res = await query;
+  const rows = (res.data ?? []) as unknown as AppointmentFlatRow[];
+
+  // Professionals (for toolbar filter dropdown)
   const proRes = await supabase
     .from('professionals')
     .select('id, name, slug')
@@ -75,25 +95,53 @@ export async function fetchAgendaWindow({
     slug: p.slug as string,
   }));
 
-  let query = supabase
-    .from('appointments')
-    .select(
-      `id, scheduled_at, ends_at, status, price_brl_final, notes,
-       clients ( id, name, phone_e164 ),
-       professionals ( id, name ),
-       services ( id, name, duration_minutes )`,
-    )
-    .gte('scheduled_at', from.toISOString())
-    .lt('scheduled_at', to.toISOString())
-    .is('deleted_at', null)
-    .order('scheduled_at');
-
-  if (professionalId) {
-    query = query.eq('professional_id', professionalId);
+  if (rows.length === 0) {
+    return { appointments: [], professionals };
   }
 
-  const res = await query;
-  const rows = (res.data ?? []) as unknown as AppointmentRow[];
+  // Resolve related rows in 3 focused queries (by id set).
+  const clientIds = [...new Set(rows.map((r) => r.client_id))];
+  const proIds = [...new Set(rows.map((r) => r.professional_id))];
+  const svcIds = [...new Set(rows.map((r) => r.service_id))];
+
+  const [clientsRes, allProfRes, servicesRes] = await Promise.all([
+    supabase
+      .from('clients')
+      .select('id, name, phone_e164')
+      .in('id', clientIds),
+    supabase.from('professionals').select('id, name').in('id', proIds),
+    supabase
+      .from('services')
+      .select('id, name, duration_minutes')
+      .in('id', svcIds),
+  ]);
+
+  const clientById = new Map(
+    (clientsRes.data ?? []).map((c) => [
+      c.id as string,
+      {
+        id: c.id as string,
+        name: c.name as string,
+        phone: c.phone_e164 as string,
+      },
+    ]),
+  );
+  const proById = new Map(
+    (allProfRes.data ?? []).map((p) => [
+      p.id as string,
+      { id: p.id as string, name: p.name as string },
+    ]),
+  );
+  const svcById = new Map(
+    (servicesRes.data ?? []).map((s) => [
+      s.id as string,
+      {
+        id: s.id as string,
+        name: s.name as string,
+        durationMinutes: s.duration_minutes as number,
+      },
+    ]),
+  );
 
   const appointments: AgendaAppointment[] = rows.map((r) => ({
     id: r.id,
@@ -102,23 +150,15 @@ export async function fetchAgendaWindow({
     status: r.status,
     priceFinalBrl: Number(r.price_brl_final),
     notes: r.notes,
-    client: r.clients
-      ? {
-          id: r.clients.id,
-          name: r.clients.name,
-          phone: r.clients.phone_e164,
-        }
-      : null,
-    professional: r.professionals
-      ? { id: r.professionals.id, name: r.professionals.name }
-      : { id: '', name: '—' },
-    service: r.services
-      ? {
-          id: r.services.id,
-          name: r.services.name,
-          durationMinutes: r.services.duration_minutes,
-        }
-      : { id: '', name: '—', durationMinutes: 0 },
+    client: clientById.get(r.client_id) ?? null,
+    professional:
+      proById.get(r.professional_id) ?? { id: r.professional_id, name: '—' },
+    service:
+      svcById.get(r.service_id) ?? {
+        id: r.service_id,
+        name: '—',
+        durationMinutes: 0,
+      },
   }));
 
   return { appointments, professionals };
