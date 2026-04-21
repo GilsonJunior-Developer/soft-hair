@@ -31,7 +31,7 @@ export function Step1Salon() {
     startTransition(async () => {
       const res = await createSalon(formData);
       if (res.ok) {
-        router.push('/onboarding/step-2');
+        router.push('/onboarding/2');
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         if (!res.fieldErrors || Object.keys(res.fieldErrors).length === 0) {

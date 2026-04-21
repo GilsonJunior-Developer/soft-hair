@@ -29,7 +29,7 @@ export default async function StepPage({ params }: { params: Params }) {
           Você precisa completar o passo 1 primeiro
         </h1>
         <Link
-          href="/onboarding/step-1"
+          href="/onboarding/1"
           className="text-sm underline [color:var(--color-accent-600)]"
         >
           Voltar para o passo 1

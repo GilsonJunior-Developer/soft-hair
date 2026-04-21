@@ -19,7 +19,7 @@ export async function Step3Prices({
           Volte ao passo 2 e selecione ao menos uma categoria.
         </p>
         <Link
-          href="/onboarding/step-2"
+          href="/onboarding/2"
           className="text-sm underline [color:var(--color-accent-600)]"
         >
           ← Voltar para o passo 2
