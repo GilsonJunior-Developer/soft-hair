@@ -1,80 +1,99 @@
 # packages/db — SoftHair Database
 
 **Stack:** Supabase (Postgres 15) + RLS multi-tenant
-**Versão:** v0.1.0 (MVP schema inicial)
+**Versão:** v0.2.0 (Story 1.2 — aplicado em softhair-dev)
 **Owner:** @data-engineer (Dara)
 
-Este pacote contém todo o estado de banco do SoftHair:
-- Schema DDL (tabelas, enums, constraints, índices)
-- RLS policies (multi-tenancy por `salon_id`)
-- Functions + triggers (status log, credit ledger, conflict detection)
-- Seed de dados iniciais (catálogo + templates WhatsApp)
-- Scripts de rollback
+Estado de banco do SoftHair — migrations, RLS, types TypeScript gerados, smoke tests.
 
 ---
 
 ## Estrutura
 
 ```
-packages/db/
-├── migrations/
-│   ├── 20260420000000_initial_schema.sql        # 16 tabelas + enums + constraints
-│   ├── 20260420000001_indexes.sql               # Índices críticos de performance
-│   ├── 20260420000002_rls_policies.sql          # RLS multi-tenant
-│   └── 20260420000003_functions_and_triggers.sql # Triggers + helpers
-├── rollback/
-│   └── 20260420000000_rollback.sql              # Drop tudo em emergência
-├── seed.sql                                      # Catálogo placeholder + templates WA
-└── README.md                                     # Este arquivo
+project-squad/
+├── supabase/                                    # ← CLI Supabase aponta aqui (git root)
+│   ├── config.toml                              # CLI config (project_id = soft-hair)
+│   └── migrations/
+│       ├── 20260420000000_initial_schema.sql    # 16 tabelas + 13 enums + constraints
+│       ├── 20260420000001_indexes.sql           # 30+ índices de performance
+│       ├── 20260420000002_rls_policies.sql      # RLS multi-tenant via current_user_salon_ids()
+│       ├── 20260420000003_functions_and_triggers.sql  # Ledger, status log, FK consistency
+│       └── 20260420000004_seed_catalog.sql      # Seed: 20 serviços + 6 templates WA (idempotent)
+└── packages/db/
+    ├── types/
+    │   ├── database.ts                          # Types gerados (DO NOT EDIT — regen via script)
+    │   └── index.ts                             # Re-exports + convenience aliases
+    ├── tests/
+    │   └── rls-smoke.test.ts                    # RLS + seed validation
+    ├── rollback/
+    │   └── 20260420000000_rollback.sql          # Emergency drop (todas as 5 migrations)
+    ├── package.json                              # Scripts gen:types, push, test
+    ├── tsconfig.json
+    ├── vitest.config.mts
+    └── README.md                                 # Este arquivo
 ```
 
 ---
 
-## Aplicando migrations
-
-### Local (Supabase CLI)
+## Comandos principais
 
 ```bash
-# 1. Iniciar Supabase local
-pnpm supabase start
+# Aplicar migrations em softhair-dev (linked)
+pnpm --filter @softhair/db push
 
-# 2. Aplicar migrations em ordem
-pnpm supabase db push
+# Dry run (ver o que seria aplicado, sem executar)
+pnpm --filter @softhair/db push:dry
 
-# OU manualmente via psql
-psql $SUPABASE_DB_URL -f migrations/20260420000000_initial_schema.sql
-psql $SUPABASE_DB_URL -f migrations/20260420000001_indexes.sql
-psql $SUPABASE_DB_URL -f migrations/20260420000002_rls_policies.sql
-psql $SUPABASE_DB_URL -f migrations/20260420000003_functions_and_triggers.sql
+# Regerar types TypeScript a partir do DB linkado
+pnpm --filter @softhair/db gen:types
 
-# 3. Aplicar seed
-psql $SUPABASE_DB_URL -f seed.sql
-```
+# Rodar smoke tests RLS contra DB linkado
+pnpm --filter @softhair/db test
 
-### Supabase Cloud (staging / prod)
-
-**Gate:** apenas `@devops` (Gage) pode aplicar migrations em staging/prod.
-
-```bash
-# Link ao projeto
-supabase link --project-ref <project-ref>
-
-# Aplicar (faz snapshot automático antes)
-supabase db push --include-seed
-
-# Ou aplicar migration individual
-supabase db push migrations/20260420000000_initial_schema.sql
+# Typecheck do package
+pnpm --filter @softhair/db typecheck
 ```
 
 ---
 
-## Rollback de emergência
+## Setup inicial (primeira vez)
+
+### 1. Link ao projeto Supabase
 
 ```bash
-psql $SUPABASE_DB_URL -f rollback/20260420000000_rollback.sql
+# Garanta que SUPABASE_ACCESS_TOKEN esteja em .env.local
+# Personal Access Token do dashboard: https://supabase.com/dashboard/account/tokens
+
+export $(grep SUPABASE_ACCESS_TOKEN .env.local | head -1)
+pnpm exec supabase link --project-ref <project-ref>
 ```
 
-**⚠️ ATENÇÃO:** deleta TODOS os dados. Em produção, preferir Supabase Point-in-Time Recovery (PITR) via dashboard.
+Project ref é o subdomain do seu URL Supabase (`https://<ref>.supabase.co`).
+
+### 2. Aplicar migrations
+
+```bash
+pnpm --filter @softhair/db push
+```
+
+CLI vai pedir confirmação antes de aplicar no remote.
+
+### 3. Gerar types
+
+```bash
+pnpm --filter @softhair/db gen:types
+```
+
+Output: `packages/db/types/database.ts` (1120 linhas, ~16 tabelas).
+
+### 4. Rodar smoke tests
+
+```bash
+pnpm --filter @softhair/db test
+```
+
+Expected: **20 pass + 5 todo** (TODOs aguardam Story 1.3 auth).
 
 ---
 
@@ -85,11 +104,11 @@ psql $SUPABASE_DB_URL -f rollback/20260420000000_rollback.sql
 | Domínio | Tabelas |
 |---|---|
 | **Identity & tenancy** | `users`, `salons`, `salon_members` |
-| **Catálogo** | `service_catalog` (global), `services` (por salão), `professionals` |
+| **Catálogo** | `service_catalog` (global), `services`, `professionals` |
 | **Operação** | `clients`, `appointments`, `appointment_status_log`, `commission_entries` |
-| **Monetização & compliance** | `invoices` (NFS-e), `referral_tokens`, `referrals`, `client_credits_log`, `messaging_log`, `whatsapp_templates` |
+| **Monetização & compliance** | `invoices`, `referral_tokens`, `referrals`, `client_credits_log`, `messaging_log`, `whatsapp_templates` |
 
-**Diagrama ER completo:** `docs/architecture.md` seção Data Models.
+ER completo: `docs/architecture.md §Data Models`.
 
 ---
 
@@ -97,94 +116,80 @@ psql $SUPABASE_DB_URL -f rollback/20260420000000_rollback.sql
 
 **Princípio:** toda tabela de domínio tem `salon_id` e é protegida por RLS.
 
-- Helper: `current_user_salon_ids()` retorna set de salões do user autenticado
-- Pattern padrão: `USING (salon_id IN (SELECT current_user_salon_ids()))`
-- `service_catalog` + `whatsapp_templates` são públicos (read-only sem `salon_id`)
-- Escritas sensíveis (comissão, ledger, status log) são bloqueadas via RLS — apenas triggers/workers (SECURITY DEFINER / service_role) podem inserir
+- Helper: `current_user_salon_ids()` retorna set de salões do user autenticado (SECURITY DEFINER)
+- Pattern: `USING (salon_id IN (SELECT current_user_salon_ids()))`
+- `service_catalog` + `whatsapp_templates` são públicos/admin (RLS ENABLE com policies diferentes)
+- Escritas sensíveis (comissão, credit ledger, status log) bloqueadas via RLS — apenas triggers (SECURITY DEFINER) ou service_role inserem
 
-**Teste de RLS:**
-```sql
--- Simular user autenticado (supabase)
-SELECT set_config('request.jwt.claims', '{"sub":"<user-uuid>"}', true);
--- Deveria retornar apenas rows do(s) salão(ões) desse user
-SELECT * FROM clients;
-```
+**Bootstrap fixes aplicados (HIGH-1 a HIGH-3 do security-audit):**
+- `salon_members_insert`: aceita OWNER criando a si mesmo no salão recém-criado
+- `salons_select`: fallback `owner_user_id = auth.uid()` permite ler salão antes de salon_members popular
+- Cross-salon FK triggers: `appointments` e `referrals` validam que todas FKs apontam pro mesmo `salon_id`
 
 ---
 
-## TODO pós-MVP setup
+## Supabase specifics (gotchas aplicados)
+
+1. **Extensions em schema `extensions`**: usamos `extensions.citext`, `extensions.gin_trgm_ops` (prefixed) pois Supabase isola extensions do search_path padrão.
+
+2. **`gen_random_uuid()` em vez de `uuid_generate_v4()`**: built-in Postgres 13+, evita dependência do `uuid-ossp` que é isolado.
+
+3. **Trigger em vez de generated column**: `appointments.ends_at` é computed via BEFORE INSERT/UPDATE trigger porque Postgres rejeita `int * interval` como IMMUTABLE em generated columns.
+
+4. **Index `idx_referral_tokens_expires` sem WHERE**: `NOW()` não é IMMUTABLE, partial index predicate rejeitado — index full funciona bem.
+
+---
+
+## TODO pós-Story 1.2
 
 ### Crítico (antes do design-partner #1)
 
-- [ ] **Expandir seed `service_catalog` para 200+ serviços** (ver comentário em `seed.sql`)
-- [ ] **Submeter 6 templates WhatsApp à Meta** via Business Manager
-- [ ] **Atualizar `meta_status` para `APPROVED`** após Meta aprovar cada template
-- [ ] **Executar `security-audit full`** — validação de RLS end-to-end
-- [ ] **Smoke test** — `pnpm db:smoke-test` rodando cenários positivos+negativos
-- [ ] **Criar primeiro usuário superadmin** (founder) manualmente em Supabase Dashboard:
+- [ ] **Expandir `service_catalog` para 200+ serviços** (seed placeholder atual: 20)
+- [ ] **Aplicar migrations em softhair-prod** (aguardando confirmação do founder)
+- [ ] **Submeter 6 templates WhatsApp à Meta** via Business Manager (Story 3.3)
+- [ ] **Rotacionar service_role_key de softhair-dev** (exposto em conversa anterior — best practice)
+- [ ] **Criar primeiro user superadmin (founder)** via SQL direto:
   ```sql
+  -- Após Story 1.3 estar deployed e você ter feito login
   UPDATE public.users SET is_superadmin = TRUE WHERE phone_e164 = '+55119XXXXXXXX';
   ```
 
-### Fast-follow (Fase 2)
+### Fast-follow (Story 1.3+)
 
-- [ ] Adicionar `pg_trgm` extension para busca fuzzy em `clients.name`
-- [ ] Criar materialized view para CalendarView month-view (agregação mensal pré-computada)
-- [ ] Partitioning de `messaging_log` e `appointment_status_log` por mês (quando tabelas passarem de 10M rows)
-- [ ] Backup verificado via restore test mensal
+- [ ] Criar trigger `on_auth_user_created` para auto-inserir em public.users (MEDIUM-2 do security audit)
+- [ ] Adicionar full impersonation tests (5 TODOs no rls-smoke.test.ts)
+- [ ] CHECK constraint em `salons.subscription_plan` (MEDIUM-3)
+- [ ] Zod validation de `salons.settings_jsonb` (MEDIUM-4)
 
----
+### Fase 2
 
-## Convenções adotadas
-
-- **Naming:** `snake_case` para tables/columns; enums em `SCREAMING_SNAKE_CASE`
-- **PKs:** sempre UUID (`uuid_generate_v4()`)
-- **Timestamps:** `created_at` + `updated_at` (trigger auto) + `deleted_at` (soft delete onde aplicável)
-- **FKs:** `ON DELETE CASCADE` para tabelas-filhas; `ON DELETE RESTRICT` para entidades que precisam preservar histórico (appointments, clients)
-- **Decimais de dinheiro:** `NUMERIC(10,2)` exceto custo de mensageria que usa `NUMERIC(10,4)` (fracionário)
-- **Enums:** Postgres nativos (não CHECK constraints)
-- **Idempotência:** todos os CREATE são `IF NOT EXISTS`; todos os inserts de seed usam `ON CONFLICT DO NOTHING`
+- [ ] Materialized view para CalendarView (mês com 600+ agendamentos)
+- [ ] Partitioning de `messaging_log` e `appointment_status_log` (quando >10M rows)
+- [ ] Backup verify via restore test mensal
 
 ---
 
-## Queries críticas (performance reference)
+## Rollback de emergência
 
-### CalendarView (dashboard /agenda)
-
-```sql
--- Todos os agendamentos do dia, por profissional
-SELECT a.*, c.name AS client_name, p.name AS professional_name, s.name AS service_name
-  FROM appointments a
-  JOIN clients c ON c.id = a.client_id
-  JOIN professionals p ON p.id = a.professional_id
-  JOIN services s ON s.id = a.service_id
- WHERE a.salon_id = $1
-   AND a.scheduled_at >= $2::date
-   AND a.scheduled_at < $2::date + INTERVAL '1 day'
-   AND a.deleted_at IS NULL
- ORDER BY a.scheduled_at;
+```bash
+# Conectar direto ao DB (precisa DB password):
+psql "postgresql://postgres:$DB_PASSWORD@db.<ref>.supabase.co:5432/postgres" \
+  -f packages/db/rollback/20260420000000_rollback.sql
 ```
 
-Índice usado: `idx_appointments_salon_date` (partial, deleted_at IS NULL).
+⚠️ **ATENÇÃO:** deleta TODOS os dados. Em produção, preferir Supabase PITR via dashboard.
 
-### Conflict detection
+---
 
-```sql
-SELECT public.check_appointment_conflict(
-  p_salon_id := $1,
-  p_professional_id := $2,
-  p_scheduled_at := $3,
-  p_duration_minutes := $4
-);
-```
+## Convenções
 
-Complexidade: O(log n) via índice `idx_appointments_professional_time`.
-
-### Dashboard de custo de mensageria
-
-```sql
-SELECT public.salon_messaging_cost_month($salon_id, 2026, 4);
-```
+- **Naming:** `snake_case` tables/columns; enums `SCREAMING_SNAKE_CASE`
+- **PKs:** UUID sempre (`gen_random_uuid()`)
+- **Timestamps:** `created_at`/`updated_at` (trigger auto) + `deleted_at` (soft delete)
+- **FKs:** CASCADE para rows filhas; RESTRICT para entidades com histórico
+- **Decimais de dinheiro:** `NUMERIC(10,2)` (exceção: mensageria `NUMERIC(10,4)`)
+- **Enums:** Postgres nativos
+- **Idempotência:** `CREATE IF NOT EXISTS` + `ON CONFLICT DO NOTHING` em seeds
 
 ---
 
@@ -192,5 +197,6 @@ SELECT public.salon_messaging_cost_month($salon_id, 2026, 4);
 
 - Architecture: `docs/architecture.md`
 - Front-end spec: `docs/front-end-spec.md`
+- Security audit: `.ai/security/security-audit-2026-04-20.md`
+- Supabase dashboard: https://supabase.com/dashboard/project/<ref>
 - Supabase docs: https://supabase.com/docs
-- Nuvem Fiscal API (ADR-0002): https://api.nuvemfiscal.com.br/docs

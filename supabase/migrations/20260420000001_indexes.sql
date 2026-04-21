@@ -76,10 +76,10 @@ CREATE INDEX IF NOT EXISTS idx_clients_salon_name
   WHERE deleted_at IS NULL;
 
 -- Busca textual em name (suporte futuro a ILIKE '%termo%')
+-- Note: gin_trgm_ops é qualified com extensions. (Supabase convention)
 CREATE INDEX IF NOT EXISTS idx_clients_name_trgm
-  ON public.clients USING gin (name gin_trgm_ops)
+  ON public.clients USING gin (name extensions.gin_trgm_ops)
   WHERE deleted_at IS NULL;
--- Nota: requer `CREATE EXTENSION IF NOT EXISTS pg_trgm;` — adicionar se ainda não estiver
 
 CREATE INDEX IF NOT EXISTS idx_clients_credit_balance
   ON public.clients (salon_id)
@@ -155,8 +155,10 @@ CREATE INDEX IF NOT EXISTS idx_referral_tokens_referrer
   ON public.referral_tokens (salon_id, referrer_client_id);
 
 CREATE INDEX IF NOT EXISTS idx_referral_tokens_expires
-  ON public.referral_tokens (expires_at)
-  WHERE expires_at > NOW();
+  ON public.referral_tokens (expires_at);
+-- Nota: index é full (não-partial). Postgres rejeita WHERE expires_at > NOW()
+-- em predicate porque NOW() não é IMMUTABLE (é STABLE). Cleanup function
+-- filtra expired em runtime — performance OK.
 
 -- ---------------------------------------------------------
 -- referrals

@@ -17,6 +17,7 @@ BEGIN;
 -- ---------------------------------------------------------
 -- Drop triggers (depende das funções)
 -- ---------------------------------------------------------
+DROP TRIGGER IF EXISTS appointments_compute_ends_at ON public.appointments;
 DROP TRIGGER IF EXISTS referrals_validate_salon_consistency ON public.referrals;
 DROP TRIGGER IF EXISTS appointments_validate_salon_consistency ON public.appointments;
 DROP TRIGGER IF EXISTS credits_log_immutable_delete ON public.client_credits_log;
@@ -40,6 +41,7 @@ DROP TRIGGER IF EXISTS invoices_set_updated_at ON public.invoices;
 DROP FUNCTION IF EXISTS public.cleanup_expired_referral_tokens();
 DROP FUNCTION IF EXISTS public.salon_messaging_cost_month(UUID, INT, INT);
 DROP FUNCTION IF EXISTS public.check_appointment_conflict(UUID, UUID, TIMESTAMPTZ, INT, UUID);
+DROP FUNCTION IF EXISTS public.compute_appointment_ends_at();
 DROP FUNCTION IF EXISTS public.validate_referral_salon_consistency();
 DROP FUNCTION IF EXISTS public.validate_appointment_salon_consistency();
 DROP FUNCTION IF EXISTS public.prevent_credits_log_mutation();
