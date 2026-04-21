@@ -1,6 +1,8 @@
-# Epic 4 — Finance, Commission & NFS-e
+# Epic 4 — Finance & Commission (NFS-e deferred to Phase 2)
 
-**Epic Goal:** Habilitar operação financeira completa do salão dentro do SoftHair: cálculo automático de comissão, dashboard financeiro com visibilidade real de faturamento/margem, e emissão de NFS-e integrada. Ao fim do epic, salão fecha o mês sem precisar de planilha paralela.
+> ⚠️ **SCOPE CHANGE 2026-04-21:** NFS-e emission (**Stories 4.5, 4.6, 4.7**) foi **movida para Phase 2**. Stories 4.1-4.4 (Commission Rule Engine, Commission Calculation, Monthly Commission Report, Basic Financial Dashboard) permanecem no MVP. Ver [change record](../change-records/2026-04-21-mvp-scope-reduction.md).
+
+**Epic Goal (MVP revised):** Cálculo automático de comissão + dashboard financeiro com visibilidade real de faturamento/margem. Salão fecha o mês com comissão pronta para pagamento. NFS-e emissão via sistema externo (contador do salão ou prefeitura) — integrada em Phase 2.
 
 ## Story 4.1: Commission Rule Engine
 
@@ -50,7 +52,13 @@ Como **dono do salão**, quero **dashboard financeiro simples mostrando faturame
 3. Gráficos renderizam em ≤ 800ms com 1000+ atendimentos no período
 4. Tela é WCAG AA (cores acessíveis em gráficos, labels descritivos, alternativas textuais)
 
-## Story 4.5: NFS-e Integration — Nuvem Fiscal/Focus NFe Setup
+---
+
+> ⏸️ **PHASE 2 — Stories 4.5, 4.6, 4.7 below were DEFERRED 2026-04-21.** Preserved intacta para retomada pós-PMF. MVP skip tudo isso.
+
+---
+
+## Story 4.5: NFS-e Integration — Nuvem Fiscal/Focus NFe Setup (PHASE 2)
 
 Como **dev**, quero **integração com parceiro NFS-e escolhido**, para que **o salão emita notas fiscais eletronicamente**.
 
@@ -62,7 +70,7 @@ Como **dev**, quero **integração com parceiro NFS-e escolhido**, para que **o 
 4. Wrapper `packages/messaging/nfse.ts` ou similar com método `emitInvoice(appointmentId)`
 5. Healthcheck valida conectividade com parceiro
 
-## Story 4.6: NFS-e Emission on Demand
+## Story 4.6: NFS-e Emission on Demand (PHASE 2)
 
 Como **recepcionista**, quero **emitir NFS-e com 1 clique pós-atendimento**, para que **o cliente receba nota fiscal sem eu ter que abrir outro sistema**.
 
@@ -76,7 +84,7 @@ Como **recepcionista**, quero **emitir NFS-e com 1 clique pós-atendimento**, pa
 6. Dashboard financeiro exibe "NFS-e emitidas" / "Pendentes" / "Falhas"
 7. Taxa de sucesso monitorada (alerta se cair abaixo de 95%)
 
-## Story 4.7: Client Invoice Delivery
+## Story 4.7: Client Invoice Delivery (PHASE 2)
 
 Como **cliente final**, quero **receber minha NFS-e por WhatsApp**, para que **eu tenha a nota para reembolso (ex. plano de saúde) sem precisar pedir**.
 

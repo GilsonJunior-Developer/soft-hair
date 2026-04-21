@@ -1,5 +1,7 @@
 # Epic 5 — Growth Loop: Indicação C2C
 
+> ⚠️ **SCOPE CHANGE 2026-04-21:** Notificações WhatsApp nesta epic são substituídas por **email + link copiável** no MVP. Phase 2 reativa entrega por WhatsApp. Ver [change record](../change-records/2026-04-21-mvp-scope-reduction.md).
+
 **Epic Goal:** Ativar diferencial competitivo único no mercado BR — sistema de indicação cliente→cliente com crédito automático. Cada cliente do salão vira potencial canal de aquisição de novos clientes, criando growth loop orgânico que beneficia o salão (mais clientes) e o SoftHair (mais dados, mais lock-in).
 
 ## Story 5.1: Referral Link Generation per Client
@@ -10,7 +12,7 @@ Como **cliente do salão**, quero **um link único de indicação para compartil
 
 1. Cada cliente tem URL canônica `softhair.com.br/indica/{token}`
 2. Token único persistido em `referral_tokens`
-3. Recepção pode enviar link ao cliente via WhatsApp pelo sistema (template `referral_link_v1` aprovado) OU cliente pode acessar pelo próprio perfil (futuro)
+3. MVP: Recepção copia link + envia manualmente via WhatsApp do próprio telefone OR email transacional. Phase 2: sistema envia automaticamente via WhatsApp Business API (template `referral_link_v1`).
 4. Página pública do link mostra: avatar do salão, breve copy ("Fulana te convidou a conhecer {Salão}. Agende sua primeira visita e ambas ganham crédito!"), CTA agendar
 5. Página rastreia conversão (análise posterior)
 
@@ -34,7 +36,7 @@ Como **sistema**, quero **confirmar a indicação quando a nova cliente comparec
 
 1. Ao mudar status do agendamento da nova cliente para `COMPLETED`, sistema dispara validação da indicação
 2. Se válida, valor do crédito é adicionado ao saldo da cliente indicadora (valor configurável pelo salão — default R$ 20 ou 15% do serviço)
-3. Indicadora recebe WhatsApp de notificação (template `referral_success_v1` aprovado)
+3. Indicadora recebe **email de notificação** ("Sua indicação a Fulana gerou R$ X de crédito"). Phase 2 adiciona WhatsApp template `referral_success_v1`.
 4. Dashboard do salão exibe "X indicações confirmadas este mês" com ROI estimado
 5. Transação de crédito persistida em `client_credits_log` (auditoria)
 
