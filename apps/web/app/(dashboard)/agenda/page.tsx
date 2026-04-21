@@ -54,15 +54,38 @@ export default async function AgendaPage({
     category: s.category as string,
   }));
 
+  const isProdLike =
+    process.env.NODE_ENV === 'production' &&
+    process.env.VERCEL_ENV === 'production';
+
   return (
-    <AgendaPageShell
-      view={view}
-      anchor={formatAnchor(anchor)}
-      professionalId={professionalId}
-      professionals={professionals}
-      appointments={appointments}
-      services={services}
-      openNew={sp.new === '1'}
-    />
+    <>
+      {!isProdLike && (
+        <pre
+          style={{
+            fontSize: 10,
+            padding: 8,
+            marginBottom: 8,
+            background: '#fffbeb',
+            border: '1px dashed #d97706',
+            borderRadius: 6,
+            color: '#78350f',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all',
+          }}
+        >
+          {`[DEBUG /agenda] view=${view} anchorISO=${anchor.toISOString()} windowFrom=${window.from.toISOString()} windowTo=${window.to.toISOString()} profFilter=${professionalId ?? 'all'} apptCount=${appointments.length} proCount=${professionals.length} svcCount=${services.length}`}
+        </pre>
+      )}
+      <AgendaPageShell
+        view={view}
+        anchor={formatAnchor(anchor)}
+        professionalId={professionalId}
+        professionals={professionals}
+        appointments={appointments}
+        services={services}
+        openNew={sp.new === '1'}
+      />
+    </>
   );
 }
