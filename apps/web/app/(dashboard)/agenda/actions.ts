@@ -244,8 +244,18 @@ export async function createAppointment(
     if (msg.includes('no_salon')) {
       return { ok: false, error: 'Salão não configurado' };
     }
-    console.error('[createAppointment] RPC error:', error);
-    return { ok: false, error: 'Erro ao criar agendamento. Tente novamente.' };
+    console.error(
+      '[createAppointment] RPC error:',
+      JSON.stringify(error, null, 2),
+    );
+    const devHint =
+      process.env.NODE_ENV !== 'production' || process.env.VERCEL_ENV === 'preview'
+        ? ` — (dev) ${code ?? 'no-code'}: ${msg.slice(0, 200)}`
+        : '';
+    return {
+      ok: false,
+      error: `Erro ao criar agendamento. Tente novamente.${devHint}`,
+    };
   }
 
   const appointmentId = (data as { id?: string } | null)?.id;
