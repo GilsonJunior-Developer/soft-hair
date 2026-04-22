@@ -109,11 +109,11 @@ export default async function HojePage() {
             aparecerão aqui.
           </p>
           <Link
-            href="/profissionais"
+            href="/agenda?new=1"
             className="mt-2 text-xs font-medium underline"
             style={{ color: 'var(--color-accent-700)' }}
           >
-            Configurar profissionais
+            Criar novo agendamento
           </Link>
         </div>
       </section>
