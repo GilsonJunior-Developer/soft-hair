@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { memo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ const VIEW_LABELS: Record<AgendaView, string> = {
   month: 'Mês',
 };
 
-export function AgendaToolbar({
+function AgendaToolbarImpl({
   view,
   anchor,
   professionalId,
@@ -139,3 +139,5 @@ export function AgendaToolbar({
     </div>
   );
 }
+
+export const AgendaToolbar = memo(AgendaToolbarImpl);

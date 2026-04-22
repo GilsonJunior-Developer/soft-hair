@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { STATUS_LABELS, type AppointmentStatus } from '@/lib/appointment-state';
 
 const STYLES: Record<AppointmentStatus, { bg: string; fg: string }> = {
@@ -23,7 +24,7 @@ const STYLES: Record<AppointmentStatus, { bg: string; fg: string }> = {
   },
 };
 
-export function StatusBadge({
+function StatusBadgeImpl({
   status,
   size = 'sm',
 }: {
@@ -47,3 +48,5 @@ export function StatusBadge({
     </span>
   );
 }
+
+export const StatusBadge = memo(StatusBadgeImpl);

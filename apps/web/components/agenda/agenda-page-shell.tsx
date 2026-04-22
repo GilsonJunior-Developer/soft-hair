@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { toZonedTime } from 'date-fns-tz';
 import {
@@ -48,9 +54,15 @@ export function AgendaPageShell({
   openNew: boolean;
 }) {
   const router = useRouter();
+  const [, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(openNew);
   const [formSlotISO, setFormSlotISO] = useState<string | null>(null);
+
+  // Router refresh wrapped in startTransition — off the input-response path.
+  const deferredRefresh = useCallback(() => {
+    startTransition(() => router.refresh());
+  }, [router]);
 
   const anchorDate = useMemo(() => parseAnchor(anchor), [anchor]);
   const agendaWindow = useMemo(
@@ -63,7 +75,7 @@ export function AgendaPageShell({
 
   const isAnchorToday = isSameDayBr(anchorDate, new Date());
 
-  useAgendaRealtime(true, () => router.refresh());
+  useAgendaRealtime(true, deferredRefresh);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -133,7 +145,7 @@ export function AgendaPageShell({
         open={selectedId !== null}
         appointment={selected}
         onClose={() => setSelectedId(null)}
-        onAfterAction={() => router.refresh()}
+        onAfterAction={deferredRefresh}
       />
 
       <Dialog
@@ -149,7 +161,7 @@ export function AgendaPageShell({
           defaultProfessionalId={professionalId}
           onSuccess={() => {
             setFormOpen(false);
-            router.refresh();
+            deferredRefresh();
           }}
           onCancel={() => setFormOpen(false)}
         />

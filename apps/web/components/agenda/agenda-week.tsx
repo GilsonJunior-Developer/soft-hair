@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { addDays } from 'date-fns';
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
@@ -10,7 +11,7 @@ import { StatusBadge } from './status-badge';
 
 const ROW_HEIGHT = 22;
 
-export function AgendaWeek({
+function AgendaWeekImpl({
   weekStart,
   appointments,
   onSelectAppointment,
@@ -111,3 +112,5 @@ export function AgendaWeek({
     </section>
   );
 }
+
+export const AgendaWeek = memo(AgendaWeekImpl);

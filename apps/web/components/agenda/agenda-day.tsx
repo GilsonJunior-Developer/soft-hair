@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { formatInTimeZone } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -25,7 +25,7 @@ function renderTimeLabels(): string[] {
   return labels;
 }
 
-export function AgendaDay({
+function AgendaDayImpl({
   dateISO,
   appointments,
   isToday,
@@ -173,3 +173,5 @@ export function AgendaDay({
     </section>
   );
 }
+
+export const AgendaDay = memo(AgendaDayImpl);

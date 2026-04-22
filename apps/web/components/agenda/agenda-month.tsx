@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addDays,
@@ -13,7 +14,7 @@ import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import { BR_TIMEZONE, formatAnchor } from '@/lib/agenda/date-range';
 import type { AgendaAppointment } from '@/app/(dashboard)/agenda/actions';
 
-export function AgendaMonth({
+function AgendaMonthImpl({
   anchor,
   appointments,
 }: {
@@ -123,6 +124,7 @@ export function AgendaMonth({
   );
 }
 
-// Needed only for weekDay(0-6) to week-starts-on-monday index.
+export const AgendaMonth = memo(AgendaMonthImpl);
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _ = getDay;
