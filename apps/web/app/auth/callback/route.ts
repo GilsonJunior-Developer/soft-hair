@@ -14,10 +14,34 @@ export const dynamic = 'force-dynamic';
  *  - First login (no salon yet) → /onboarding
  *  - Returning user → /hoje (or `?redirect=...` preserved from middleware)
  */
+const SAFE_NEXT_PREFIXES = [
+  '/hoje',
+  '/agenda',
+  '/clientes',
+  '/profissionais',
+  '/servicos',
+  '/financeiro',
+  '/indicacao',
+  '/configuracoes',
+  '/onboarding',
+  '/auth/nova-senha',
+];
+
+function safeNext(candidate: string | null): string | null {
+  if (!candidate) return null;
+  if (!candidate.startsWith('/')) return null;
+  if (!SAFE_NEXT_PREFIXES.some((p) => candidate.startsWith(p))) return null;
+  return candidate;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const redirectTo = searchParams.get('redirect') ?? '/hoje';
+  // Accept both `next` (new param, explicit destination for flows like
+  // password recovery) and legacy `redirect` (kept for back-compat).
+  const explicitNext = safeNext(
+    searchParams.get('next') ?? searchParams.get('redirect'),
+  );
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`);
@@ -31,7 +55,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=invalid_or_expired`);
   }
 
-  // Determine post-login destination
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -40,7 +63,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=no_user`);
   }
 
-  // Check if user has a salon associated (onboarded)
+  // If caller asked for a specific post-callback destination (e.g. recovery
+  // flow going to /auth/nova-senha), honor it and skip onboarding detection.
+  if (explicitNext) {
+    return NextResponse.redirect(`${origin}${explicitNext}`);
+  }
+
+  // Default: funnel into onboarding if no salon yet, else /hoje.
   const { data: membership } = await supabase
     .from('salon_members')
     .select('salon_id')
@@ -52,5 +81,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/onboarding`);
   }
 
-  return NextResponse.redirect(`${origin}${redirectTo}`);
+  return NextResponse.redirect(`${origin}/hoje`);
 }

@@ -45,9 +45,14 @@ export async function requestPasswordReset(
   const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http';
   const origin = `${proto}://${host}`;
 
+  // The recovery email's link must land on /auth/callback so the PKCE code
+  // is exchanged for a session cookie BEFORE /auth/nova-senha runs — otherwise
+  // auth.getUser() returns null there and updateUser fails with
+  // "Link inválido ou expirado". The callback honors ?next= and redirects
+  // post-exchange to the target page with an authenticated session.
   const { error } = await supabase.auth.resetPasswordForEmail(
     parsed.data.email,
-    { redirectTo: `${origin}/auth/nova-senha` },
+    { redirectTo: `${origin}/auth/callback?next=/auth/nova-senha` },
   );
 
   if (error) {
