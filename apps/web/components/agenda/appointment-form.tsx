@@ -65,7 +65,6 @@ export function AppointmentForm({
   );
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
-  const [notes, setNotes] = useState('');
   const [isPending, startTransition] = useTransition();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generic, setGeneric] = useState<string | null>(null);
@@ -108,7 +107,6 @@ export function AppointmentForm({
         clientName: matchedClientId ? undefined : clientName,
         clientPhone: matchedClientId ? undefined : phone,
         clientEmail: matchedClientId || !clientEmail ? undefined : clientEmail,
-        notes: notes.trim() || null,
       });
 
       if (!res.ok) {
@@ -258,18 +256,6 @@ export function AppointmentForm({
           )}
         </section>
       </div>
-
-      <section className="flex flex-col gap-2">
-        <Label htmlFor="notes">Observações</Label>
-        <textarea
-          id="notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          placeholder="Ex.: alergia, preferência, cor desejada"
-          className="rounded-[var(--radius-md)] border px-3 py-2 text-sm [border-color:var(--color-border-strong)]"
-        />
-      </section>
 
       {generic && (
         <div

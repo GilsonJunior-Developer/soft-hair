@@ -24,7 +24,6 @@ export type AgendaAppointment = {
   endsAt: string;
   status: AppointmentStatus;
   priceFinalBrl: number;
-  notes: string | null;
   client: { id: string; name: string; phone: string } | null;
   professional: { id: string; name: string };
   service: { id: string; name: string; durationMinutes: number };
@@ -42,7 +41,6 @@ type AppointmentFlatRow = {
   ends_at: string;
   status: AppointmentStatus;
   price_brl_final: number | string;
-  notes: string | null;
   client_id: string;
   professional_id: string;
   service_id: string;
@@ -67,7 +65,7 @@ export async function fetchAgendaWindow({
   let query = supabase
     .from('appointments')
     .select(
-      'id, scheduled_at, ends_at, status, price_brl_final, notes, client_id, professional_id, service_id',
+      'id, scheduled_at, ends_at, status, price_brl_final, client_id, professional_id, service_id',
     )
     .gte('scheduled_at', from.toISOString())
     .lt('scheduled_at', to.toISOString())
@@ -79,6 +77,11 @@ export async function fetchAgendaWindow({
   }
 
   const res = await query;
+  if (res.error) {
+    // Fail loud — masking the error with `.data ?? []` hid a real bug for hours.
+    console.error('[fetchAgendaWindow] appointments select error:', res.error);
+    throw new Error(`Agenda fetch failed: ${res.error.message}`);
+  }
   const rows = (res.data ?? []) as unknown as AppointmentFlatRow[];
 
   // Professionals (for toolbar filter dropdown)
@@ -149,7 +152,6 @@ export async function fetchAgendaWindow({
     endsAt: r.ends_at,
     status: r.status,
     priceFinalBrl: Number(r.price_brl_final),
-    notes: r.notes,
     client: clientById.get(r.client_id) ?? null,
     professional:
       proById.get(r.professional_id) ?? { id: r.professional_id, name: '—' },
@@ -200,7 +202,6 @@ const createAppointmentSchema = z
     professionalId: z.string().uuid(),
     serviceId: z.string().uuid(),
     scheduledAt: z.string().datetime(),
-    notes: z.string().max(500).optional().nullable(),
     clientId: z.string().uuid().optional().nullable(),
     clientName: z.string().trim().min(2).max(120).optional(),
     clientPhone: z.string().optional(),
@@ -254,7 +255,6 @@ export async function createAppointment(
       p_client_name: parsed.data.clientName ?? undefined,
       p_client_phone: normalizedPhone ?? undefined,
       p_client_email: parsed.data.clientEmail ?? undefined,
-      p_notes: parsed.data.notes ?? undefined,
       p_source: 'MANUAL_BY_STAFF',
     },
   );

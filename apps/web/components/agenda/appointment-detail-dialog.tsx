@@ -99,9 +99,6 @@ export function AppointmentDetailDialog({
               label="Horário"
               value={`${formatInTimeZone(new Date(appointment.scheduledAt), BR_TIMEZONE, "dd/MM · HH:mm")} → ${formatInTimeZone(new Date(appointment.endsAt), BR_TIMEZONE, 'HH:mm')}`}
             />
-            {appointment.notes && (
-              <Row label="Observações" value={appointment.notes} />
-            )}
           </dl>
 
           {allowed.length > 0 ? (
