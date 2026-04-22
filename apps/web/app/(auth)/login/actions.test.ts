@@ -1,17 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-/*
- * Mock next/headers (Server-Component-only APIs) before importing actions.
- * The real `headers()` / `cookies()` throw when called outside a request scope.
- */
 vi.mock('next/headers', () => ({
-  cookies: vi.fn(async () => ({
-    getAll: () => [],
-    set: () => {},
-  })),
+  cookies: vi.fn(async () => ({ getAll: () => [], set: () => {} })),
   headers: vi.fn(async () => ({
-    get: (key: string) =>
-      key === 'host' ? 'localhost:3000' : null,
+    get: (key: string) => (key === 'host' ? 'localhost:3000' : null),
   })),
 }));
 
@@ -21,85 +13,90 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock Supabase client — control the response from signInWithOtp
-const mockSignInWithOtp = vi.fn();
+const mockSignInWithPassword = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
-    auth: {
-      signInWithOtp: mockSignInWithOtp,
-    },
+    auth: { signInWithPassword: mockSignInWithPassword },
   })),
 }));
 
-/*
- * Import after mocks so the module picks up our stubs.
- */
-import { sendMagicLink } from './actions';
+import { signInWithPassword } from './actions';
 
-describe('sendMagicLink', () => {
+describe('signInWithPassword (email + password pivot ADR-0003)', () => {
   beforeEach(() => {
-    mockSignInWithOtp.mockReset();
+    mockSignInWithPassword.mockReset();
   });
 
-  it('rejects malformed email', async () => {
+  it('rejects malformed email before calling Supabase', async () => {
     const fd = new FormData();
     fd.set('email', 'not-an-email');
+    fd.set('password', 'validpass123');
 
-    const res = await sendMagicLink(fd);
+    const res = await signInWithPassword(fd);
 
     expect(res.ok).toBe(false);
     if (res.ok === false) {
       expect(res.fieldErrors?.email).toBeDefined();
     }
-    expect(mockSignInWithOtp).not.toHaveBeenCalled();
+    expect(mockSignInWithPassword).not.toHaveBeenCalled();
   });
 
-  it('rejects empty email', async () => {
-    const fd = new FormData();
-    fd.set('email', '');
-
-    const res = await sendMagicLink(fd);
-
-    expect(res.ok).toBe(false);
-    expect(mockSignInWithOtp).not.toHaveBeenCalled();
-  });
-
-  it('normalizes email (trim + lowercase) before sending', async () => {
-    mockSignInWithOtp.mockResolvedValue({ error: null });
-    const fd = new FormData();
-    fd.set('email', '  Alice@TEST.COM  ');
-
-    await expect(sendMagicLink(fd)).rejects.toThrow('NEXT_REDIRECT');
-
-    expect(mockSignInWithOtp).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'alice@test.com' }),
-    );
-  });
-
-  it('returns generic error when Supabase fails', async () => {
-    mockSignInWithOtp.mockResolvedValue({
-      error: { message: 'SMTP provider down' },
-    });
+  it('rejects password shorter than 8 chars', async () => {
     const fd = new FormData();
     fd.set('email', 'alice@test.com');
+    fd.set('password', 'short');
 
-    const res = await sendMagicLink(fd);
+    const res = await signInWithPassword(fd);
 
     expect(res.ok).toBe(false);
     if (res.ok === false) {
-      expect(res.error).toBeDefined();
-      // Generic message — should NOT leak "SMTP provider down"
-      expect(res.error).not.toContain('SMTP');
+      expect(res.fieldErrors?.password).toBeDefined();
+    }
+    expect(mockSignInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it('normalizes email (trim + lowercase) before sending', async () => {
+    mockSignInWithPassword.mockResolvedValue({ error: null });
+    const fd = new FormData();
+    fd.set('email', '  Alice@TEST.COM  ');
+    fd.set('password', 'validpass123');
+
+    await expect(signInWithPassword(fd)).rejects.toThrow('NEXT_REDIRECT');
+
+    expect(mockSignInWithPassword).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'alice@test.com',
+        password: 'validpass123',
+      }),
+    );
+  });
+
+  it('returns generic error when credentials invalid (does not leak which field)', async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      error: { message: 'Invalid login credentials' },
+    });
+    const fd = new FormData();
+    fd.set('email', 'alice@test.com');
+    fd.set('password', 'validpass123');
+
+    const res = await signInWithPassword(fd);
+
+    expect(res.ok).toBe(false);
+    if (res.ok === false) {
+      expect(res.error).toBe('Email ou senha incorretos');
+      // Should NOT leak Supabase internals nor reveal which field failed
+      expect(res.error).not.toContain('credentials');
+      expect(res.error).not.toContain('password');
+      expect(res.error).not.toContain('Invalid');
     }
   });
 
-  it('redirects to /check-email on success (email in query)', async () => {
-    mockSignInWithOtp.mockResolvedValue({ error: null });
+  it('redirects to /hoje on success (middleware handles onboarding funnel)', async () => {
+    mockSignInWithPassword.mockResolvedValue({ error: null });
     const fd = new FormData();
     fd.set('email', 'alice@test.com');
+    fd.set('password', 'validpass123');
 
-    await expect(sendMagicLink(fd)).rejects.toThrow(
-      'NEXT_REDIRECT:/check-email?e=alice%40test.com',
-    );
+    await expect(signInWithPassword(fd)).rejects.toThrow('NEXT_REDIRECT:/hoje');
   });
 });
