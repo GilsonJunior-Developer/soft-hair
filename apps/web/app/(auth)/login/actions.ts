@@ -1,9 +1,12 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+
+/* ----------------------------------------------------------
+ * Schema
+ * ----------------------------------------------------------*/
 
 const loginSchema = z.object({
   email: z
@@ -11,62 +14,60 @@ const loginSchema = z.object({
     .trim()
     .toLowerCase()
     .email('Formato de email inválido')
-    .min(5, 'Email muito curto')
-    .max(254, 'Email muito longo'),
+    .min(5)
+    .max(254),
+  password: z
+    .string()
+    .min(8, 'Senha deve ter ao menos 8 caracteres')
+    .max(128),
 });
 
 export type LoginResult =
   | { ok: true }
-  | { ok: false; error: string; fieldErrors?: { email?: string } };
+  | { ok: false; error: string; fieldErrors?: { email?: string; password?: string } };
 
 /**
- * Send magic link to the given email via Supabase Auth.
+ * Email + password login via Supabase Auth.
  *
  * Security:
- *  - Email normalized (trim + lowercase) before processing
- *  - Generic success response (does NOT reveal whether email is registered)
- *  - On service error, logs to server but returns generic error to client
- *  - Supabase handles rate limiting (default 4/hour per email)
+ *  - Email normalized (trim + lowercase)
+ *  - Generic error "Email ou senha incorretos" — does NOT reveal which field failed
+ *  - Real error logged server-side for observability
+ *  - On success, redirects server-side to /hoje (middleware handles onboarded vs not)
  */
-export async function sendMagicLink(formData: FormData): Promise<LoginResult> {
-  const parsed = loginSchema.safeParse({ email: formData.get('email') });
+export async function signInWithPassword(
+  formData: FormData,
+): Promise<LoginResult> {
+  const parsed = loginSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+  });
 
   if (!parsed.success) {
-    return {
-      ok: false,
-      error: 'Email inválido',
-      fieldErrors: {
-        email: parsed.error.issues[0]?.message ?? 'Email inválido',
-      },
-    };
+    const fieldErrors: { email?: string; password?: string } = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0];
+      if (key === 'email' && !fieldErrors.email) fieldErrors.email = issue.message;
+      if (key === 'password' && !fieldErrors.password)
+        fieldErrors.password = issue.message;
+    }
+    return { ok: false, error: 'Dados inválidos', fieldErrors };
   }
 
   const supabase = await createClient();
-  const hdrs = await headers();
-  const host = hdrs.get('host') ?? 'localhost:3000';
-  const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-  const origin = `${proto}://${host}`;
-
-  const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
-    options: {
-      emailRedirectTo: `${origin}/auth/callback`,
-      shouldCreateUser: true,
-    },
+    password: parsed.data.password,
   });
 
   if (error) {
-    // Log real error server-side for Sentry/ops; generic response to client
-    console.error('[sendMagicLink] Supabase error:', error.message);
+    console.error('[signInWithPassword] Supabase error:', error.message);
     return {
       ok: false,
-      error: 'Não foi possível enviar o email. Tente novamente em instantes.',
+      error: 'Email ou senha incorretos',
     };
   }
 
-  // Success — redirect to check-email screen (OK to leak email here via query
-  // since the user typed it; shown in the UI to help them check the right inbox)
-  redirect(
-    `/check-email?e=${encodeURIComponent(parsed.data.email)}`,
-  );
+  // Success — middleware decides /hoje vs /onboarding based on membership
+  redirect('/hoje');
 }

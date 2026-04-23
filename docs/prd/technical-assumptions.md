@@ -38,7 +38,8 @@ Monorepo gerenciado via **Turborepo**. Apps e packages:
 - **Frontend stack:** Next.js 15 (App Router, RSC, Server Actions), TypeScript estrito, Tailwind CSS v4, shadcn/ui
 - **Backend:** Server Actions do Next.js para maioria das operações; edge functions Supabase apenas onde latência global justificar
 - **Database:** Supabase (PostgreSQL 15+) com Row-Level Security (RLS) para multi-tenancy; migrations versionadas em `packages/db`
-- **Auth:** Supabase Auth customizado para magic link via WhatsApp (implementação de OTP pré-compartilhada com cliente via BSP + validação customizada)
+- **Auth:** Supabase Auth com email + senha como método primário; magic link via email apenas para recuperação de senha. Ver ADR-0003.
+- **Transactional email (SMTP):** Resend configurado como SMTP custom em ambos projetos Supabase (softhair-dev + softhair-prod). Free tier (100/dia + 3.000/mês) suficiente para 20 design-partners no MVP. Domain verification obrigatória (SPF/DKIM/DMARC). Built-in Supabase email service NÃO é aceitável em produção (reputação de IP, rate limits agressivos). Ver Story 1.8.
 - **Hosting:** Vercel (web), Railway ou Fly.io (Chatwoot + workers), Supabase Cloud (DB + Auth + Storage)
 - **Messaging:** WhatsApp Business API oficial via 360dialog ou Meta Cloud API direto (decisão pendente) + Chatwoot self-hosted como orquestrador
 - **Queue/Jobs:** Inngest ou Trigger.dev para agendar confirmações/lembretes + retries NFS-e

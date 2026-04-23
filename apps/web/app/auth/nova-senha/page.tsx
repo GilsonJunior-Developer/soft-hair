@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import { LoginForm } from './login-form';
+import { NovaSenhaForm } from './form';
 
 export const metadata: Metadata = {
-  title: 'Entrar',
-  description: 'Acesse sua conta SoftHair.',
+  title: 'Nova senha',
+  description: 'Defina uma nova senha para sua conta.',
 };
 
-export default function LoginPage() {
+export default function NovaSenhaPage() {
   return (
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-2 text-center">
@@ -14,14 +14,14 @@ export default function LoginPage() {
           className="text-2xl font-semibold"
           style={{ color: 'var(--color-text-strong)' }}
         >
-          Entrar
+          Nova senha
         </h1>
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Email e senha da sua conta SoftHair.
+          Crie uma senha segura. Você usará ela para acessar o SoftHair daqui em diante.
         </p>
       </header>
 
-      <LoginForm />
+      <NovaSenhaForm />
     </section>
   );
 }
