@@ -1,0 +1,125 @@
+handoff:
+  id: po-to-qa-gate-1.5-2026-04-23
+  created_at: '2026-04-23T00:00:00Z'
+  from_agent: '@po'
+  from_persona: Pax (Balancer)
+  to_agent: '@qa'
+  to_persona: Quinn (Test Architect)
+  last_command: '*close-story'
+  next_command: '*qa-gate'
+  consumed: true
+  consumed_at: '2026-04-23T00:00:00Z'
+  consumed_by: '@qa'
+  outcome: 'Gate CONCERNS emitido em docs/qa/gates/1.5-professional-profile-setup.yml. 6 tech-debt items (REQ-001, REQ-002, TEST-001, TEST-002, MNT-001, DOC-001). Descoberta: AC6 é mitigado server-side por bucket file_size_limit=524288 + MIME whitelist — melhor do que a avaliação inicial do handoff. Epic 1 close unblocked.'
+  priority: P1
+
+context:
+  sprint: Epic 1 close-out (final pendência)
+  reason: |
+    Epic 1 fechou 7/8 stories (1.1-1.4 já Done, 1.6+1.7 fechadas hoje com
+    CONCERNS aceito, 1.8 formalmente em Backlog por decisão do Founder).
+    Story 1.5 (Professional Profile Setup) está em "Ready for Review" há
+    2 dias mas NUNCA passou por QA gate formal. Esta é a única pendência
+    para declarar Epic 1 complete.
+
+  concurrent_work:
+    - agent: '@dev'
+      story: '2.3'
+      status: in_progress
+      note: 'Gate da 1.5 NÃO bloqueia Story 2.3. Roda em paralelo.'
+
+story_to_gate:
+  id: '1.5'
+  title: Professional Profile Setup
+  current_status: 'Ready for Review (photo upload deferred — see Dev Agent Record)'
+  file: docs/stories/1.5.professional-profile.md
+  shipped_in: PR #8 (commit 70e4e47, 2026-04-21)
+  branch_context: 'branch atual é docs/story-1.5-close — indicates intent to close'
+
+  acceptance_criteria_summary:
+    - 'AC1: Lista profissionais — ✅ implementada'
+    - 'AC2: Form de cadastro (nome + foto opcional + specialties + working hours + commission) — ⚠️ PARCIAL (photo upload deferred; demais ok)'
+    - 'AC3: Edit + soft delete — ✅ implementada'
+    - 'AC4: Inactive não aparece na agenda pública — ✅ implementada (validação integration em 2.3)'
+    - 'AC5: Limite 1-20 profissionais — ✅ server-side (COUNT query antes do insert)'
+    - 'AC6: Photo resize ≤ 500KB — ⚠️ DEFERRED (bucket + RLS prontos; UI + client-side resize não implementados)'
+    - 'AC7: E2E test — ⚠️ DEFERRED (mesmo padrão 1.4/1.6/1.7 — depende de setup Playwright runner, Phase 2 testing)'
+
+  deferrals_consciously_accepted:
+    - task: '1.3 (Documentar bucket config em packages/db/README.md)'
+      type: tech-debt
+      severity: low
+    - task: '3.4 (Photo upload client-side resize via browser-image-compression)'
+      type: scope-reduction
+      severity: low
+      rationale: 'Salão opera sem foto no MVP; foto é polish visual; ~30% a mais de código para implementar corretamente (resize + MIME validation + size enforcement client+server)'
+    - task: '5.5 (uploadProfessionalPhoto Server Action)'
+      type: scope-reduction
+      severity: low
+      rationale: 'Par com 3.4 — bucket e RLS prontos, mas action não implementada'
+    - task: '7.1/7.2 (E2E Playwright CRUD + limit enforcement)'
+      type: tech-debt
+      severity: medium
+      rationale: 'WAIVED explicitamente em 2026-04-23 change log — mesma regra das stories 1.4, 1.6, 1.7; aguarda setup de Playwright runner'
+
+  validation_results_from_dev:
+    - typecheck: pass
+    - lint: pass
+    - tests: '27/27 pass (Vitest — actions unit tests baixa prioridade; Zod schemas são logic primária)'
+    - build: 'pass (14 rotas)'
+    - migration: 'supabase/migrations/20260421000003_storage_professional_photos.sql applied in softhair-dev'
+
+requested_action:
+  task: '*qa-gate 1.5'
+  expected_verdict: |
+    Sugiro CONCERNS (alinhado com padrão das stories 1.6/1.7 fechadas hoje).
+    AC6 (photo) e AC7 (E2E) são deferrals documentados e conscientes — não
+    falhas de implementação. Se o @qa preferir WAIVED formal, também é
+    aceitável (Founder pode aprovar via waiver para registrar que a lacuna
+    é explicitamente aceita em vez de apenas "trackeada como tech debt").
+
+  7_quality_checks_hints:
+    code_review:
+      - 'Storage bucket RLS (4 policies) é CRÍTICO — validar path convention {salon_id}/... + public SELECT'
+      - 'Limit 1-20 app-layer: considerar se deveria ter CHECK constraint no banco (tech-debt candidate)'
+      - 'Working hours JSON schema com Zod — reutilizado em Story 2.1 (agenda) e 2.4 (slots)'
+    unit_tests:
+      - '27/27 pass mas actions não têm coverage direta — mesmo gap das 1.6/1.7'
+    acceptance_criteria:
+      - 'AC6 (photo ≤ 500KB): bucket + RLS prontos, mas resize/upload UI não; documentar como CONCERNS ou WAIVED'
+      - 'AC7 (E2E): consistente com deferral das outras stories Epic 1; tratar igual'
+    no_regressions:
+      - 'PR #8 foi shipped há 2 dias; verificar se Story 2.A (agenda visual) não quebrou algo no /profissionais'
+    performance:
+      - 'COUNT query antes do insert é ok em escala MVP (2-10 profissionais), mas adicionar ao backlog para Phase 2'
+    security:
+      - 'RLS policies em professional-photos bucket: path injection possível? Validar que storage.foldername() sanitiza'
+      - 'Limit 1-20 client + server — TOCTOU (time-of-check-time-of-use) concern em alta concorrência? MVP-level aceitável'
+    documentation:
+      - 'Task 1.3 (packages/db/README.md) não documentada — tech debt'
+
+  after_gate:
+    if_verdict_pass:
+      action: '@po *close-story 1.5'
+      result: 'Epic 1 declarado Complete (7/7 active stories + 1.8 backlog deferred)'
+    if_verdict_concerns:
+      action: '@po *close-story 1.5 (aceitar CONCERNS) + backlog-add tech-debt items'
+      result: 'Epic 1 Complete com tech debt tracked em docs/qa/backlog.md'
+    if_verdict_fail:
+      action: '@qa handoff para @dev *apply-qa-fixes 1.5'
+      result: 'Epic 1 close-out bloqueado até fix landed'
+
+epic_close_after:
+  epic: Epic 1
+  files_to_update:
+    - docs/prd/epic-1-foundation-salon-onboarding.md (adicionar Status: Complete header se apropriado)
+    - docs/qa/backlog.md (agregar tech-debt da 1.5)
+  announcement: |
+    Quando Story 1.5 fechar, Epic 1 (Foundation & Salon Onboarding) está
+    declarado Complete — MVP base pronto, pivot para Epic 2 (Core Booking
+    Loop) já em execução via Sprint 2.A.
+
+signatures:
+  po_requestor: Pax (Product Owner)
+  po_request_date: '2026-04-23'
+  context_rationale: 'Founder escolheu rota formal (opção 1) em vez de atalho sem gate — preserva selo de qualidade em todas as stories do Epic 1'

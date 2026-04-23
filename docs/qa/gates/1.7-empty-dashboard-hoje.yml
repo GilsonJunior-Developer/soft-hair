@@ -1,0 +1,54 @@
+schema: 1
+story: '1.7'
+gate: CONCERNS
+status_reason: 'AC1-5 fully implemented and shipped (PR #9); AC6 (axe-core automated) and AC7 (Playwright E2E) deferred. INP HIGH bug flagged post-ship already remediated in PR #11. Non-blocking for Epic 1 close.'
+reviewer: 'Quinn'
+updated: '2026-04-23T00:00:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'AC7 not met — Playwright E2E rendering test (dashboard-hoje.spec.ts, Chromium + Webkit projects) explicitly deferred until Phase 2 testing runner setup'
+    suggested_action: 'Create tech-debt item to cover /hoje + nav primitives + PWA install smoke via Playwright + webkit once E2E runner is configured'
+  - id: 'TEST-002'
+    severity: medium
+    finding: 'AC6 partial — accessibility validated manually (semantic HTML, ARIA labels, focus ring) but axe-core automated audit deferred; target was 0 violations'
+    suggested_action: 'Add axe-core assertion run (accessibility ≥ 95 per story gate) in same E2E setup as TEST-001'
+  - id: 'PERF-001'
+    severity: high
+    finding: 'Lighthouse Performance ≥ 85 mobile gate (explicit in story AC and Quality Gate Tasks) was NOT validated before ship — INP hit 1.440ms post-ship, flagged by founder'
+    suggested_action: 'RESOLVED — PR #11 applied startTransition + React.memo + Realtime debounce (≥600ms with requestIdleCallback). Follow-up: wire Lighthouse CI as pre-merge gate so regressions fail fast instead of shipping'
+  - id: 'REQ-001'
+    severity: low
+    finding: 'Manual PWA install smoke test on iOS Safari real device deferred to founder post-deploy — not reflected back into story QA Results'
+    suggested_action: 'Founder to confirm PWA install works on iOS + Android Chrome and append result; create tracking item if not done within 1 week'
+waiver: { active: false }
+quality_checks:
+  - check: code_review
+    verdict: PASS
+    notes: 'CSS-only responsive (hidden lg:flex / lg:hidden) — zero hydration mismatch; NAV_ITEMS single source of truth; clean Server/Client split; active state calculated via pathname prefix for nested routes'
+  - check: unit_tests
+    verdict: CONCERNS
+    notes: 'No axe-core automated audit (Task 8 deferred); typecheck + lint + build all pass'
+  - check: acceptance_criteria
+    verdict: CONCERNS
+    notes: 'AC1-5 fully met; AC6 manual-only (no axe-core); AC7 (E2E Chrome + Safari iOS) deferred'
+  - check: no_regressions
+    verdict: PASS
+    notes: 'typecheck/lint/build clean; /hoje/page.tsx modified by PR #11 INP fix (2026-04-21 21:58) — verified no regression; middleware still protects all new routes'
+  - check: performance
+    verdict: PASS
+    notes: 'INP HIGH bug (1.440ms click, culprit: span render 1.309ms) was closed by PR #11 applying RSC refresh + Realtime INP-safe pattern: startTransition + React.memo + Realtime debounce ≥600ms with requestIdleCallback. Gate NOT re-opened due to historical failure — pattern now established framework-wide.'
+  - check: security
+    verdict: PASS
+    notes: 'No new auth surfaces; placeholder pages middleware-protected; PWA manifest contains no secrets; theme-color/icons are static assets'
+  - check: documentation
+    verdict: PASS
+    notes: 'Thorough story + commit + implementation notes; deferrals explicitly listed with rationale (SW customizado for Phase 2, axe-core for E2E runner phase, PNG fallback conditional)'
+handoff:
+  next_agent: '@dev'
+  next_command: '*apply-qa-fixes 1.7'
+  rationale: 'CONCERNS verdict — TEST-001/TEST-002 (E2E + axe-core) and REQ-001 (iOS PWA smoke) tracked as tech debt. PERF-001 already closed via PR #11. Does NOT block Epic 1 close or Sprint 2.A work. @dev can pick up non-blocking in parallel with Story 2.3.'
+  does_not_block: ['2.3']
+  follow_up:
+    - 'Wire Lighthouse CI as pre-merge gate (extract from PERF-001 RESOLVED root cause)'
+    - 'Founder to confirm PWA install on iOS Safari + Android Chrome (REQ-001)'
