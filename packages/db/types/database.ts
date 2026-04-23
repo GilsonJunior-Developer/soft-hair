@@ -64,6 +64,13 @@ export type Database = {
             foreignKeyName: "appointment_status_log_salon_id_fkey"
             columns: ["salon_id"]
             isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_status_log_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
             referencedRelation: "salons"
             referencedColumns: ["id"]
           },
@@ -152,6 +159,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appointments_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "public_professionals_v"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_referral_token_id_fkey"
             columns: ["referral_token_id"]
             isOneToOne: false
@@ -162,7 +176,21 @@ export type Database = {
             foreignKeyName: "appointments_salon_id_fkey"
             columns: ["salon_id"]
             isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
             referencedRelation: "salons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "public_services_v"
             referencedColumns: ["id"]
           },
           {
@@ -231,6 +259,13 @@ export type Database = {
             foreignKeyName: "client_credits_log_salon_id_fkey"
             columns: ["salon_id"]
             isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_credits_log_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
             referencedRelation: "salons"
             referencedColumns: ["id"]
           },
@@ -241,6 +276,7 @@ export type Database = {
           created_at: string
           credit_balance_brl: number
           deleted_at: string | null
+          email: string | null
           id: string
           lgpd_consent_at: string | null
           name: string
@@ -253,6 +289,7 @@ export type Database = {
           created_at?: string
           credit_balance_brl?: number
           deleted_at?: string | null
+          email?: string | null
           id?: string
           lgpd_consent_at?: string | null
           name: string
@@ -265,6 +302,7 @@ export type Database = {
           created_at?: string
           credit_balance_brl?: number
           deleted_at?: string | null
+          email?: string | null
           id?: string
           lgpd_consent_at?: string | null
           name?: string
@@ -274,6 +312,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "clients_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "clients_salon_id_fkey"
             columns: ["salon_id"]
@@ -330,6 +375,20 @@ export type Database = {
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_entries_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "public_professionals_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_entries_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
             referencedColumns: ["id"]
           },
           {
@@ -405,6 +464,13 @@ export type Database = {
             foreignKeyName: "invoices_salon_id_fkey"
             columns: ["salon_id"]
             isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
             referencedRelation: "salons"
             referencedColumns: ["id"]
           },
@@ -466,6 +532,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_log_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
             referencedColumns: ["id"]
           },
           {
@@ -541,6 +614,13 @@ export type Database = {
             foreignKeyName: "professionals_salon_id_fkey"
             columns: ["salon_id"]
             isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professionals_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
             referencedRelation: "salons"
             referencedColumns: ["id"]
           },
@@ -584,6 +664,13 @@ export type Database = {
             columns: ["referrer_client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_tokens_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
             referencedColumns: ["id"]
           },
           {
@@ -665,6 +752,13 @@ export type Database = {
             foreignKeyName: "referrals_salon_id_fkey"
             columns: ["salon_id"]
             isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
             referencedRelation: "salons"
             referencedColumns: ["id"]
           },
@@ -693,6 +787,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "salon_members_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "salon_members_salon_id_fkey"
             columns: ["salon_id"]
@@ -847,6 +948,13 @@ export type Database = {
             foreignKeyName: "services_salon_id_fkey"
             columns: ["salon_id"]
             isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
             referencedRelation: "salons"
             referencedColumns: ["id"]
           },
@@ -884,6 +992,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "users_default_salon_fk"
+            columns: ["default_salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "users_default_salon_fk"
             columns: ["default_salon_id"]
@@ -928,7 +1043,114 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_professionals_v: {
+        Row: {
+          bio: string | null
+          id: string | null
+          name: string | null
+          photo_url: string | null
+          salon_id: string | null
+          slug: string | null
+          specialties: string[] | null
+        }
+        Insert: {
+          bio?: string | null
+          id?: string | null
+          name?: string | null
+          photo_url?: string | null
+          salon_id?: string | null
+          slug?: string | null
+          specialties?: string[] | null
+        }
+        Update: {
+          bio?: string | null
+          id?: string | null
+          name?: string | null
+          photo_url?: string | null
+          salon_id?: string | null
+          slug?: string | null
+          specialties?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professionals_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professionals_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "salons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_salons_v: {
+        Row: {
+          city: string | null
+          id: string | null
+          name: string | null
+          slug: string | null
+        }
+        Insert: {
+          city?: string | null
+          id?: string | null
+          name?: string | null
+          slug?: string | null
+        }
+        Update: {
+          city?: string | null
+          id?: string | null
+          name?: string | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
+      public_services_v: {
+        Row: {
+          category: string | null
+          duration_minutes: number | null
+          id: string | null
+          name: string | null
+          price_brl: number | null
+          salon_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          duration_minutes?: number | null
+          id?: string | null
+          name?: string | null
+          price_brl?: number | null
+          salon_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          duration_minutes?: number | null
+          id?: string | null
+          name?: string | null
+          price_brl?: number | null
+          salon_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "services_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "salons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       check_appointment_conflict: {
@@ -942,6 +1164,47 @@ export type Database = {
         Returns: boolean
       }
       cleanup_expired_referral_tokens: { Args: never; Returns: number }
+      create_appointment_atomic: {
+        Args: {
+          p_client_email?: string
+          p_client_id?: string
+          p_client_name?: string
+          p_client_phone?: string
+          p_notes?: string
+          p_professional_id: string
+          p_scheduled_at: string
+          p_service_id: string
+          p_source?: string
+        }
+        Returns: {
+          cancel_token: string
+          client_id: string
+          commission_calculated_brl: number | null
+          created_at: string
+          deleted_at: string | null
+          duration_minutes: number
+          ends_at: string
+          id: string
+          idempotency_key: string | null
+          price_brl_discount: number
+          price_brl_final: number
+          price_brl_original: number
+          professional_id: string
+          referral_token_id: string | null
+          salon_id: string
+          scheduled_at: string
+          service_id: string
+          source: Database["public"]["Enums"]["appointment_source"]
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_salon_bootstrap: {
         Args: { p_city?: string; p_cnpj?: string; p_name: string }
         Returns: {
@@ -974,6 +1237,41 @@ export type Database = {
         Returns: number
       }
       slugify: { Args: { input: string }; Returns: string }
+      transition_appointment_status: {
+        Args: {
+          p_appointment_id: string
+          p_reason?: string
+          p_to: Database["public"]["Enums"]["appointment_status"]
+        }
+        Returns: {
+          cancel_token: string
+          client_id: string
+          commission_calculated_brl: number | null
+          created_at: string
+          deleted_at: string | null
+          duration_minutes: number
+          ends_at: string
+          id: string
+          idempotency_key: string | null
+          price_brl_discount: number
+          price_brl_final: number
+          price_brl_original: number
+          professional_id: string
+          referral_token_id: string | null
+          salon_id: string
+          scheduled_at: string
+          service_id: string
+          source: Database["public"]["Enums"]["appointment_source"]
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "appointments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       unaccent_portuguese: { Args: { input: string }; Returns: string }
     }
     Enums: {
