@@ -1,0 +1,47 @@
+schema: 1
+story: '1.6'
+gate: CONCERNS
+status_reason: 'AC1-5 fully implemented and shipped (PR #8); AC6 (E2E CRUD test) deferred to Phase 2 testing without formal waiver. Non-blocking for Epic 1 close.'
+reviewer: 'Quinn'
+updated: '2026-04-23T00:00:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'AC6 not met — E2E test of service CRUD (apps/web/e2e/service-crud.spec.ts) explicitly deferred until Playwright env setup (Phase 2 testing)'
+    suggested_action: 'Create tech-debt item to cover service CRUD via Playwright once E2E runner is configured; track against Phase 2 testing milestone'
+  - id: 'TEST-002'
+    severity: low
+    finding: 'No Vitest unit tests for server actions in apps/web/app/(dashboard)/servicos/actions.ts (createCustomService, updateService, toggleServiceActive, softDeleteService, addServicesFromCatalog) despite reference to Vitest in story Dev Notes'
+    suggested_action: 'Add action-level unit tests (Zod validation edge cases: duration 14/15/480/481, commission 0/100/101) in next maintenance window'
+  - id: 'REQ-001'
+    severity: low
+    finding: 'AC6 deferral was not explicitly approved via WAIVED mechanism by @po — approved at draft validation, not post-implementation'
+    suggested_action: 'For future stories, route deferred AC through formal waiver (active: true, approved_by field) before InReview transition'
+waiver: { active: false }
+quality_checks:
+  - check: code_review
+    verdict: PASS
+    notes: 'Clean RSC/Client component split; Zod validation; dedup defense-in-depth (client filter + server-side in addServicesFromCatalog); catalog-locked vs custom distinction well handled'
+  - check: unit_tests
+    verdict: CONCERNS
+    notes: 'No coverage on server actions; typecheck + lint + build all pass'
+  - check: acceptance_criteria
+    verdict: CONCERNS
+    notes: 'AC1-5 fully met; AC6 (E2E) deferred'
+  - check: no_regressions
+    verdict: PASS
+    notes: 'typecheck: pass; lint: pass; build: pass (6 /servicos/* routes); files intact since ship (PR #8, 2026-04-21)'
+  - check: performance
+    verdict: PASS
+    notes: 'GET-form search avoids hydration; acceptable for MVP scale of 2-10 professionals per salon'
+  - check: security
+    verdict: PASS
+    notes: 'Zod schema enforces duration %15==0, price >= 0, commission 0-100; soft delete via deleted_at + is_active=false; catalog_id FK ON DELETE SET NULL; RLS on services table (assumed from prior Story 1.4/1.5 schema)'
+  - check: documentation
+    verdict: PASS
+    notes: 'Story file, commit message, Change Log all thorough; implementation notes explain catalog-vs-custom, commission opt-in, search without hydration, price format, dedup strategy, soft delete'
+handoff:
+  next_agent: '@dev'
+  next_command: '*apply-qa-fixes 1.6'
+  rationale: 'CONCERNS verdict — TEST-001 (E2E) and TEST-002 (unit tests) tracked as tech debt. Does NOT block Epic 1 close or Sprint 2.A work. @dev can pick up non-blocking in parallel with Story 2.3.'
+  does_not_block: ['2.3']

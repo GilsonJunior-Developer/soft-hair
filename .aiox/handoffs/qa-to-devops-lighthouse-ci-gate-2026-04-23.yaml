@@ -1,0 +1,183 @@
+handoff:
+  id: qa-to-devops-lighthouse-ci-gate-2026-04-23
+  created_at: '2026-04-23T00:00:00Z'
+  from_agent: '@qa'
+  from_persona: Quinn (Test Architect)
+  to_agent: '@devops'
+  to_persona: Gage (DevOps)
+  last_command: '*qa-gate'
+  next_command: '*setup-lighthouse-ci'
+  consumed: false
+  priority: P0
+
+context:
+  origin:
+    backlog_item: 1.7-PERF-002
+    backlog_file: docs/qa/backlog.md
+    triggering_incident:
+      id: 1.7-PERF-001
+      description: 'INP 1.440ms no click da agenda reportado pelo Founder pós-ship'
+      severity: high
+      status: resolved
+      resolution: 'PR #11 aplicou RSC refresh + Realtime INP-safe pattern (startTransition + React.memo + Realtime debounce ≥600ms + requestIdleCallback)'
+      bug_report: docs/qa/bug-inp-performance-2026-04-21.md
+
+  problem_statement: |
+    Story 1.7 tinha como AC explícita "Lighthouse Performance ≥ 85 mobile"
+    e "Accessibility ≥ 95" como quality gate obrigatório. Esse gate NÃO
+    estava automatizado no CI — foi validado manualmente (e furado). A
+    regressão (INP 1.440ms) chegou em prod e só foi flagrada pelo Founder
+    no DevTools. O fix-forward (PR #11) resolveu o sintoma mas a lacuna
+    de processo continua: próxima regressão de performance vai seguir o
+    mesmo padrão de ship-then-fix se o gate não for amarrado no CI.
+
+  current_ci_state:
+    workflow_file: .github/workflows/ci.yml
+    jobs:
+      - name: detect
+        status: ok
+        role: 'Detecta stack (has_web, has_e2e) — usado para gating condicional'
+      - name: lint-test-build
+        status: ok
+        role: 'lint + typecheck + test (Vitest) + build (Next.js)'
+      - name: e2e
+        status: dormant
+        role: 'Gated por apps/web/playwright.config.ts que AINDA NÃO existe — job nunca executou'
+        note: 'Script pnpm test:e2e também não existe no apps/web/package.json'
+
+  gap_analysis:
+    missing:
+      - 'Lighthouse CI job no ci.yml'
+      - 'lighthouserc.json com thresholds (Performance ≥ 85, Accessibility ≥ 95)'
+      - 'Script pnpm lhci ou equivalente no apps/web/package.json'
+      - 'URLs de teste (local start após build, ou preview deploy Vercel)'
+    nice_to_have:
+      - 'axe-core integrado no job e2e (quando Playwright for configurado — par natural com setup do runner)'
+      - 'Comment bot que posta report Lighthouse no PR'
+
+proposal:
+  scope: |
+    Adicionar job lighthouse no ci.yml que roda APÓS lint-test-build e
+    antes do e2e (independente do e2e, já que e2e ainda é dormant). Job
+    deve:
+    1. Instalar dependências + fazer build
+    2. Iniciar servidor Next em modo production (pnpm start)
+    3. Rodar @lhci/cli contra URLs críticas do app
+    4. Falhar o PR se qualquer threshold for violado
+
+  config_files_to_create:
+    - path: apps/web/lighthouserc.json
+      purpose: Config do @lhci/cli com URLs, thresholds, número de runs
+      suggested_content: |
+        {
+          "ci": {
+            "collect": {
+              "url": [
+                "http://localhost:3000/hoje",
+                "http://localhost:3000/profissionais",
+                "http://localhost:3000/servicos"
+              ],
+              "startServerCommand": "pnpm start",
+              "startServerReadyPattern": "Ready",
+              "numberOfRuns": 3,
+              "settings": {
+                "preset": "desktop",
+                "emulatedFormFactor": "mobile",
+                "throttlingMethod": "devtools"
+              }
+            },
+            "assert": {
+              "preset": "lighthouse:recommended",
+              "assertions": {
+                "categories:performance": ["error", {"minScore": 0.85}],
+                "categories:accessibility": ["error", {"minScore": 0.95}],
+                "categories:best-practices": ["warn", {"minScore": 0.9}],
+                "categories:seo": ["warn", {"minScore": 0.9}],
+                "interactive": ["error", {"maxNumericValue": 3000}],
+                "interaction-to-next-paint": ["error", {"maxNumericValue": 200}]
+              }
+            },
+            "upload": {
+              "target": "temporary-public-storage"
+            }
+          }
+        }
+      note: |
+        URLs /hoje, /profissionais, /servicos são as 3 rotas principais de
+        Epic 1. O assertion "interaction-to-next-paint" <= 200ms previne
+        diretamente a classe de bug que causou 1.7-PERF-001.
+
+  package_json_changes:
+    path: apps/web/package.json
+    add_dev_dependencies:
+      - '@lhci/cli'
+    add_scripts:
+      - name: lhci
+        command: 'lhci autorun --config=./lighthouserc.json'
+
+  ci_yml_changes:
+    path: .github/workflows/ci.yml
+    add_job_after: lint-test-build
+    new_job:
+      name: lighthouse
+      runs-on: ubuntu-latest
+      needs: [detect, lint-test-build]
+      condition: needs.detect.outputs.has_web == 'true'
+      steps:
+        - uses: actions/checkout@v4
+        - uses: pnpm/action-setup@v4
+        - uses: actions/setup-node@v4
+          with:
+            node-version: 22
+            cache: pnpm
+        - run: pnpm install --frozen-lockfile
+        - run: pnpm build
+        - run: pnpm --filter @softhair/web lhci
+          env:
+            LHCI_GITHUB_APP_TOKEN: '${{ secrets.LHCI_GITHUB_APP_TOKEN }}'
+
+  branch_protection:
+    recommendation: |
+      Após o job estabilizar (2-3 PRs sem flake), adicionar "lighthouse"
+      como required status check em branch protection rule da main.
+      Isso força o gate pré-merge.
+
+success_criteria:
+  acceptance:
+    - 'CI job lighthouse verde em PR de teste (pode ser um PR dummy tocando apenas docs/)'
+    - 'PR que propositalmente regride performance (ex: adicionar setTimeout bloqueante) é BLOQUEADO pelo gate'
+    - 'Threshold de INP ≤ 200ms ativo no assertion set'
+    - 'lighthouserc.json versionado em apps/web/'
+    - 'Documentação no README de como rodar local (pnpm --filter @softhair/web lhci)'
+
+  out_of_scope:
+    - 'Setup de axe-core automated (par natural mas depende do Playwright — 1.7-TEST-002 via P1 hardening sprint)'
+    - 'LHCI server self-hosted (upload.target é temporary-public-storage por ora — suficiente para MVP)'
+    - 'Visual regression testing (Percy, Chromatic) — Phase 2'
+
+risks_and_flakes:
+  known_lighthouse_flake_patterns:
+    - 'Primeira run após cold start pode hit threshold — por isso numberOfRuns: 3'
+    - 'Network throttling via DevTools protocol é mais estável que lighthouse:recommended default'
+    - 'Build cache variação pode causar drift de 2-3 pontos — manter threshold com margem (85 em vez de 90)'
+
+  mitigation: |
+    Começar com thresholds declarados como "warn" por 2-3 PRs, promover
+    para "error" depois de confirmar estabilidade. Alternativa: rodar o
+    job em modo continue-on-error nos primeiros 3 PRs coletando baseline.
+
+related_items:
+  unblocks:
+    - 'Sprint 2.A / Story 2.3 — NÃO bloqueia, CI novo roda em paralelo'
+  blocks:
+    - 'Próximo ship de feature visível em /hoje ou agenda SEM ter este gate ativo seria reintrodução de risco'
+  paired_with:
+    - '1.7-TEST-001 (Playwright setup) — mesmo sprint de hardening'
+    - '1.7-TEST-002 (axe-core) — pode absorver Accessibility via axe em vez de Lighthouse categories:accessibility'
+  reference_memory:
+    - feedback_rsc_performance_pattern.md (padrão INP-safe já estabelecido framework-wide)
+
+signatures:
+  qa_reviewer: Quinn (Test Architect)
+  qa_review_date: '2026-04-23'
+  escalation_reason: 'Process gap: gate de performance não amarrado no CI — fix-forward do PR #11 resolveu sintoma mas não causa raiz'
