@@ -32,21 +32,22 @@ Como **founder/dev**, quero **o modelo de dados core (salão, usuário, profissi
 7. Testes de RLS: unit test validando que usuário de salão A não acessa dados de salão B
 8. Seed SQL com 200+ serviços padrão populando `service_catalog`
 
-## Story 1.3: Magic Link Authentication via WhatsApp
+## Story 1.3: Email + Password Authentication (with magic link recovery)
 
-Como **dono do salão**, quero **fazer login usando apenas meu número de WhatsApp (sem senha)**, para que **o acesso seja simples e sem fricção, alinhado ao comportamento natural do setor**.
+Como **dono do salão**, quero **fazer login com email e senha, com opção de recuperar senha via link enviado por email**, para que **o acesso diário seja rápido e eu não perca acesso ao salão se esquecer a senha**.
 
 ### Acceptance Criteria
 
-1. Tela de login aceita número de WhatsApp (formato BR: +55 DDD 9XXXX-XXXX)
-2. Ao submeter, sistema gera OTP de 6 dígitos válido por 10 minutos
-3. OTP é enviado via BSP WhatsApp (360dialog ou Meta Cloud API direto) usando template utility aprovado
-4. Tela de validação OTP aceita código e retorna sessão válida do Supabase Auth
-5. Sessão expira após 30 dias de inatividade
-6. Rate limit: máximo 3 solicitações de OTP por número a cada 10 minutos
-7. Logout limpa sessão e redireciona para tela de login
-8. Fallback claro se BSP falhar (mensagem de erro + "tentar de novo em X segundos")
-9. Todo o fluxo passa teste E2E (Playwright) usando mock do BSP
+1. Tela de login aceita email + senha
+2. Ao submeter, autenticação via `supabase.auth.signInWithPassword`
+3. Sessão expira após 30 dias de inatividade (auto-refresh < 24h)
+4. Rate limit de autenticação: seguir defaults do Supabase
+5. Logout limpa sessão e redireciona para tela de login
+6. Fluxo "Esqueci minha senha" envia magic link via email (`supabase.auth.resetPasswordForEmail`) que rota via `/auth/callback` → `/auth/nova-senha`
+7. Mensagens de erro genéricas (não revelar existência de email)
+8. Schema: `public.users.email` NOT NULL UNIQUE; `phone_e164` NULLABLE (Phase 2)
+9. Trigger `on_auth_user_created` popula `public.users` automaticamente
+10. Full flow passa E2E (Playwright): login, logout, reset password, nova senha
 
 ## Story 1.4: Salon Signup & Onboarding Wizard
 
@@ -102,5 +103,20 @@ Como **dono do salão**, quero **ver uma tela inicial clara mostrando o que acon
 5. PWA manifest configurado (installable)
 6. Acessibilidade: navegação por teclado + ARIA labels validados com axe-core
 7. Passa teste E2E de renderização em Chrome + Safari iOS (via Playwright)
+
+## Story 1.8: Custom SMTP for Transactional Email
+
+Como **dono do salão**, quero **receber emails de recuperação de senha e notificações com alta confiabilidade (≥ 95% inbox em Gmail/Outlook)**, para que **eu não perca acesso à plataforma e clientes recebam confirmações de agendamento**.
+
+### Acceptance Criteria
+
+1. Conta Resend criada, domínio `<dominio-softhair>` verificado via DNS (SPF/DKIM/DMARC passam em mxtoolbox.com)
+2. SMTP custom aplicado em `softhair-dev` via Management API (patch `mailer.secure_password_change`, `smtp_*` via script)
+3. SMTP custom aplicado em `softhair-prod` via mesma API
+4. Script `scripts/supabase-auth-setup.ts` atualizado para incluir campos `smtp_host`, `smtp_port`, `smtp_user`, `smtp_pass`, `smtp_sender_email`, `smtp_sender_name`, `smtp_max_frequency`
+5. Secrets (Resend API key) armazenados fora do repo (Vercel env vars OR Supabase Vault); rotação documentada
+6. Smoke test em dev: enviar reset password para conta de teste, confirmar chegada em Gmail (inbox, não spam) em ≤ 2 min
+7. Smoke test em prod (pós-apply): idem, com Founder validando recebimento real
+8. Change Log de `softhair-prod` registrado em `docs/ops/prod-smtp-config-<data>.md`
 
 ---
