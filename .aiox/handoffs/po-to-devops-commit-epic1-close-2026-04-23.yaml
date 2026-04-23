@@ -1,0 +1,217 @@
+handoff:
+  id: po-to-devops-commit-epic1-close-2026-04-23
+  created_at: '2026-04-23T00:00:00Z'
+  from_agent: '@po'
+  from_persona: Pax (Balancer)
+  to_agent: '@devops'
+  to_persona: Gage (DevOps)
+  last_command: '*close-story'
+  next_command: '*push'
+  consumed: false
+  priority: P1
+
+context:
+  reason: |
+    Epic 1 (Foundation & Salon Onboarding) foi declarado Complete nesta
+    sessão. Close-out tem 11 files não-commitados na working tree, mas
+    a branch atual é feature/2.3-public-booking-link (trabalho do Dex
+    para Story 2.3 ainda não mergeado, 1 commit ahead de main).
+
+    Founder escolheu estratégia "branch dedicada + só Grupo A" — preserva
+    separação de escopo entre Epic 1 close e Sprint 2.A em progresso.
+
+  current_branch: feature/2.3-public-booking-link
+  base_branch: main
+  ahead_of_main: 1 commit (a8adefb — feat(public): Story 2.3 public booking link per professional)
+
+file_grouping:
+  group_A_commit_now:
+    description: 'Close-out do Epic 1 — entregáveis desta sessão'
+    modified_files:
+      - docs/stories/1.5.professional-profile.md
+      - docs/stories/1.6.service-catalog-customization.md
+      - docs/stories/1.7.empty-dashboard-hoje.md
+      - docs/prd/epic-1-foundation-salon-onboarding.md
+    untracked_files:
+      - docs/qa/backlog.md
+      - docs/qa/gates/1.5-professional-profile-setup.yml
+      - docs/qa/gates/1.6-service-catalog-customization.yml
+      - docs/qa/gates/1.7-empty-dashboard-hoje.yml
+      - .aiox/handoffs/po-to-qa-gate-1.5-2026-04-23.yaml
+      - .aiox/handoffs/qa-to-devops-lighthouse-ci-gate-2026-04-23.yaml
+      - .aiox/handoffs/qa-to-po-close-1.5-2026-04-23.yaml
+      - .aiox/handoffs/qa-to-po-close-1.6-1.7-2026-04-23.yaml
+      - .aiox/handoffs/po-to-devops-commit-epic1-close-2026-04-23.yaml (este arquivo)
+
+  group_B_leave_for_later:
+    description: 'Trabalho não relacionado ao Epic 1 close — fica pendente para outros commits do Founder/Dara'
+    untracked_files:
+      - docs/framework/handoff-dara-supabase-autonomy-2026-04-21.md
+      - docs/ops/prod-bootstrap-2026-04-21.sql
+      - docs/ops/sprint-2A-preflight-2026-04-21.sql
+      - docs/ops/sprint-2A-rpcs-2026-04-21.sql
+      - docs/qa/bug-inp-performance-2026-04-21.md
+      - docs/sync-obsidian.py
+
+branch_strategy:
+  target_branch: docs/epic-1-close
+  base_from: main (sincronizado com origin)
+  rationale: |
+    Branch dedicada a partir do main evita misturar close-out do Epic 1
+    com trabalho da Story 2.3 ainda em progresso. PR da docs/epic-1-close
+    vai ser independente e pode ser mergeada em qualquer ordem com a PR
+    da 2.3.
+
+execution_plan:
+  pre_flight_checks:
+    - 'Confirmar branch atual: feature/2.3-public-booking-link (1 ahead de main)'
+    - 'Confirmar 11 files pendentes (4 modified + 7 untracked nosso escopo; +6 untracked Grupo B)'
+    - 'Confirmar que main está sincronizado com origin (git pull --ff-only)'
+
+  steps:
+    - step: 1
+      description: 'Stash tudo (modified + untracked)'
+      command: "git stash push -u -m 'epic-1-close + pending ops work 2026-04-23'"
+      risk: low
+      note: '-u include untracked — preserva docs/qa/gates/, .aiox/handoffs/, docs/ops/ etc'
+
+    - step: 2
+      description: 'Sync main com remote'
+      command: "git checkout main && git pull origin main --ff-only"
+      risk: low
+
+    - step: 3
+      description: 'Criar branch dedicada'
+      command: "git checkout -b docs/epic-1-close"
+      risk: low
+
+    - step: 4
+      description: 'Restaurar stash (traz Grupos A + B de volta)'
+      command: "git stash pop"
+      risk: medium
+      note: 'Se houver conflitos com main (improvável — só docs mexidos), resolver manualmente. Grupo A eram docs modificados na branch feature/2.3, mas são arquivos diferentes dos tocados pelo commit a8adefb (2.3 mexeu em apps/web + supabase/migrations).'
+
+    - step: 5
+      description: 'Adicionar APENAS Grupo A — listar explicitamente'
+      command: |
+        git add docs/stories/1.5.professional-profile.md \
+                docs/stories/1.6.service-catalog-customization.md \
+                docs/stories/1.7.empty-dashboard-hoje.md \
+                docs/prd/epic-1-foundation-salon-onboarding.md \
+                docs/qa/backlog.md \
+                docs/qa/gates/ \
+                .aiox/handoffs/
+      risk: low
+      note: |
+        Grupo B fica dirty na working tree da branch docs/epic-1-close.
+        Isso é OK temporariamente; o Founder ou @devops pode stashá-los
+        de novo ou commitá-los em branches separadas depois.
+
+    - step: 6
+      description: 'Verificar staging antes do commit'
+      command: "git status && git diff --cached --stat"
+      risk: none
+      purpose: 'Audit: só Grupo A deve estar staged'
+
+    - step: 7
+      description: 'Commit com mensagem aprovada pelo Founder'
+      command_template: |
+        git commit -m "$(cat <<'EOF'
+        docs(epic-1): close Epic 1 — QA gates 1.5/1.6/1.7 + tech debt backlog
+
+        Close-out formal do Epic 1 (Foundation & Salon Onboarding):
+
+        - Stories 1.5, 1.6, 1.7 fechadas com gate CONCERNS aceito (Quinn)
+        - PRD Epic 1 marcado Complete (7/7 active + 1.8 deferida)
+        - 3 gate files em docs/qa/gates/
+        - Consolidação tech debt em docs/qa/backlog.md (14 items)
+        - 5 handoff artifacts em .aiox/handoffs/
+
+        Story 1.8 (Custom SMTP) formalmente em Backlog por decisão do Founder
+        (MVP com 1 salão tolera rate limit built-in Supabase).
+
+        Próximo P0: 1.7-PERF-002 (Lighthouse CI gate) escalado para @devops
+        via .aiox/handoffs/qa-to-devops-lighthouse-ci-gate-2026-04-23.yaml.
+        Sprint 2.A (Story 2.3) segue sem bloqueio.
+
+        Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+        EOF
+        )"
+      risk: low
+      note: 'Sem --no-verify. Pre-commit hooks devem rodar normalmente.'
+
+    - step: 8
+      description: 'Push da branch para origin'
+      command: "git push -u origin docs/epic-1-close"
+      risk: low
+      note: 'Authority: @devops EXCLUSIVE'
+
+    - step: 9
+      description: 'Criar PR (opcional — decisão do Founder)'
+      command_template: |
+        gh pr create \
+          --base main \
+          --head docs/epic-1-close \
+          --title "docs(epic-1): close Epic 1 — gates + tech debt backlog" \
+          --body "$(cat <<'EOF'
+        ## Summary
+
+        Fechamento formal do Epic 1 (Foundation & Salon Onboarding):
+        - Stories 1.5, 1.6, 1.7 → Done (gates CONCERNS aceitos)
+        - PRD Epic 1 marcado Complete (7/7 active + 1.8 Backlog deferida)
+        - Tech debt consolidado (14 items em docs/qa/backlog.md)
+
+        ## Gates emitidos
+
+        | Story | Verdict | Top issue |
+        |---|---|---|
+        | 1.5 | CONCERNS | AC6 mitigado server-side (bucket 512KB + MIME), UI deferida |
+        | 1.6 | CONCERNS | AC6 (E2E CRUD) deferred Phase 2 |
+        | 1.7 | CONCERNS | AC7 deferred + PERF-001 já resolvido em PR #11 |
+
+        ## Próximos P0
+
+        - 1.7-PERF-002 (Lighthouse CI gate pré-merge) — handoff @devops
+        - Setup Playwright runner — destrava 1.5/1.6/1.7 TEST-001
+
+        ## Test plan
+
+        - [x] Stories refletem Status Done + QA Results appendado
+        - [x] Gate files com verdict + 7 quality checks
+        - [x] Backlog consolidado 14 items
+        - [ ] CI verde na PR (apenas docs, expect green)
+
+        🤖 Generated with [Claude Code](https://claude.com/claude-code)
+        EOF
+        )"
+      risk: low
+      decision_point: 'Criar PR agora OU deixar só no push e o Founder cria via UI? Sugerir ao Founder no momento.'
+
+  post_steps:
+    - 'Verificar estado da working tree: git status deve mostrar só Grupo B (6 files untracked)'
+    - 'Comunicar ao Founder: branch docs/epic-1-close pushada com commit único; PR criada (ou aguardando decisão)'
+    - 'Atualizar este handoff: consumed: true + outcome'
+
+authority_check:
+  git_push: '@devops EXCLUSIVO — autorizado aqui'
+  gh_pr_create: '@devops EXCLUSIVO — autorizado aqui'
+  branch_creation: 'qualquer agente, autorizado aqui'
+  commit: 'qualquer agente exceto @qa, autorizado aqui'
+
+do_not:
+  - 'NÃO commitar Grupo B junto — escopos heterogêneos precisam de commits separados'
+  - 'NÃO usar --no-verify (skip de pre-commit hooks)'
+  - 'NÃO usar --force em push (primeiro push da branch, não precisa)'
+  - 'NÃO fazer rebase interativo'
+  - 'NÃO mergear direto em main sem PR'
+  - 'NÃO fazer amend de commits já pushados (este é um commit novo, ok)'
+
+expected_outcome:
+  - 'Branch docs/epic-1-close existe em origin com 1 commit acima de main'
+  - 'PR aberta (ou link pronto pro Founder abrir) com 11 files changed'
+  - 'Working tree local na branch docs/epic-1-close com Grupo B ainda dirty (aguardando commits separados)'
+  - 'Handoff qa-to-devops-lighthouse-ci-gate-2026-04-23.yaml ainda não consumido (próxima missão do @devops)'
+
+signatures:
+  po_requestor: Pax (Product Owner)
+  po_request_date: '2026-04-23'

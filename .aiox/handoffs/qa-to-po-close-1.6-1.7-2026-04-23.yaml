@@ -1,0 +1,90 @@
+handoff:
+  id: qa-to-po-close-1.6-1.7-2026-04-23
+  created_at: '2026-04-23T00:00:00Z'
+  from_agent: '@qa'
+  from_persona: Quinn (Test Architect)
+  to_agent: '@po'
+  to_persona: Pax (Product Owner)
+  last_command: '*qa-gate'
+  next_command: '*close-story'
+  consumed: true
+  consumed_at: '2026-04-23T00:00:00Z'
+  consumed_by: '@po'
+  outcome: 'Ambas as stories (1.6 + 1.7) fechadas com CONCERNS aceito. Status InReview → Done em 2026-04-23. Epic 1 close-out em progresso (7/8 stories done; 1.8 deferida para Backlog por decisão do Founder).'
+
+context:
+  sprint: Epic 1 close-out
+  parent_epic: Epic 1 (Foundations — Auth, Onboarding, Professionals, Services, Dashboard)
+  concurrent_work:
+    - agent: '@dev'
+      story: '2.3'
+      status: in_progress
+      note: 'Close-out de Epic 1 NÃO bloqueia Story 2.3. Dex continua em paralelo.'
+
+stories:
+  - id: '1.6'
+    title: Service Catalog Customization
+    current_status: InReview
+    target_status: Done
+    gate_verdict: CONCERNS
+    gate_file: docs/qa/gates/1.6-service-catalog-customization.yml
+    accept_with_concerns: true
+    rationale: |
+      AC1-5 shipped e funcionais (PR #8). AC6 (E2E CRUD Playwright) adiado
+      para Fase 2 testing — deferral consciente, não bloqueante para valor
+      de Epic 1. Tech debt rastreado em docs/qa/backlog.md (1.6-TEST-001,
+      1.6-TEST-002, 1.6-REQ-001).
+    action_required:
+      - Atualizar Status: InReview → Done
+      - Adicionar entrada no Change Log da story registrando close com CONCERNS
+      - Confirmar que itens de backlog ficam sob gestão do @po até entrarem em sprint
+
+  - id: '1.7'
+    title: Empty Dashboard "Hoje"
+    current_status: InReview
+    target_status: Done
+    gate_verdict: CONCERNS
+    gate_file: docs/qa/gates/1.7-empty-dashboard-hoje.yml
+    accept_with_concerns: true
+    rationale: |
+      AC1-5 shipped (PR #9). AC6 (axe-core) e AC7 (Playwright) adiados
+      para Fase 2. PERF-001 (INP 1.440ms HIGH) já RESOLVIDO via PR #11 —
+      padrão RSC+Realtime INP-safe agora framework-wide. Lacuna de
+      processo (Lighthouse CI pré-merge) escalada separadamente para
+      @devops como 1.7-PERF-002. Tech debt rastreado em
+      docs/qa/backlog.md.
+    action_required:
+      - Atualizar Status: InReview → Done
+      - Adicionar entrada no Change Log registrando close com CONCERNS
+      - Nota: PERF-001 já marcada como done no backlog (PR #11)
+
+epic_close_decision:
+  epic: Epic 1
+  recommendation: CLOSE
+  conditions_met:
+    - Stories 1.1-1.5 já fechadas (PRs #14 + #15)
+    - Stories 1.6 + 1.7 shipped e funcionais em prod (PRs #8 + #9)
+    - Incidente INP pós-ship remediado (PR #11)
+    - Tech debt identificado, quantificado e priorizado (8 itens, 1 done)
+  conditions_pending:
+    - 1.7-PERF-002 (Lighthouse CI gate) — não bloqueia Epic 1 close, mas é
+      pré-requisito P0 antes do próximo ship de feature visible
+    - Founder confirmação de PWA install (1.7-REQ-001) — low severity
+
+alternatives:
+  - agent: '@dev'
+    command: '*apply-qa-fixes 1.6 1.7'
+    condition: |
+      Se founder optar por fechar débito ANTES do close. Não recomendado:
+      itens P1/P2 adicionariam latência sem proporcionar valor incremental
+      ao MVP já em prod.
+  - agent: '@qa'
+    command: '*waiver 1.6 1.7'
+    condition: |
+      Se founder preferir formalizar WAIVED (aprovado_by: Founder) em vez
+      de CONCERNS. Tradeoff: WAIVED é mais limpo semanticamente mas
+      CONCERNS já registra o débito com rastreabilidade equivalente.
+
+signatures:
+  qa_reviewer: Quinn (Test Architect)
+  qa_review_date: '2026-04-23'

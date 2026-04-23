@@ -1,6 +1,22 @@
 # Epic 1 — Foundation & Salon Onboarding
 
+**Status:** ✅ Complete (2026-04-23) — 7/7 active stories Done + 1 deferida (Story 1.8 SMTP custom, formalmente em Backlog por decisão do Founder)
 **Epic Goal:** Estabelecer a base técnica do produto (Next.js + Supabase + CI/CD) e entregar o primeiro fluxo completo de valor: o dono do salão cria sua conta, configura o salão, customiza serviços a partir do catálogo pronto, cadastra o primeiro profissional e chega a uma tela funcional de agenda (ainda vazia, pronta para Epic 2). Ao final do epic, o projeto está deployável em produção e temos um health-check operacional.
+
+## Story Status Summary
+
+| Story | Title | Status | Gate | PR |
+|---|---|---|---|---|
+| 1.1 | Project Scaffolding & CI/CD Foundation | ✅ Done | — | #2 |
+| 1.2 | Data Model Foundation & RLS Policies | ✅ Done | — | #8 |
+| 1.3 | Email + Password Authentication | ✅ Done | — | #12 |
+| 1.4 | Salon Signup & Onboarding Wizard | ✅ Done | — | #8 |
+| 1.5 | Professional Profile Setup | ✅ Done | CONCERNS (2026-04-23) | #8 |
+| 1.6 | Service Catalog Customization | ✅ Done | CONCERNS (2026-04-23) | #8 |
+| 1.7 | Empty Dashboard "Hoje" | ✅ Done | CONCERNS (2026-04-23) | #9, #11 |
+| 1.8 | Custom SMTP for Transactional Email | 🗄️ Backlog (deferred) | — | — |
+
+**Tech debt consolidado:** `docs/qa/backlog.md` (14 itens: 1 done + 12 open + 1 escalado para @devops / Lighthouse CI).
 
 ## Story 1.1: Project Scaffolding & CI/CD Foundation
 

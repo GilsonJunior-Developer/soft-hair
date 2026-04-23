@@ -1,0 +1,68 @@
+handoff:
+  id: qa-to-po-close-1.5-2026-04-23
+  created_at: '2026-04-23T00:00:00Z'
+  from_agent: '@qa'
+  from_persona: Quinn (Test Architect)
+  to_agent: '@po'
+  to_persona: Pax (Product Owner)
+  last_command: '*qa-gate'
+  next_command: '*close-story'
+  consumed: true
+  consumed_at: '2026-04-23T00:00:00Z'
+  consumed_by: '@po'
+  outcome: 'Story 1.5 fechada com CONCERNS aceito. Status Ready for Review → Done em 2026-04-23. Epic 1 (Foundation & Salon Onboarding) declarado Complete — 7/7 active stories Done, Story 1.8 formalmente Backlog (deferida pelo Founder). Sprint 2.A (Epic 2 core booking loop) sem bloqueio.'
+  priority: P1
+
+context:
+  sprint: Epic 1 close-out (última pendência)
+  previous_handoff: .aiox/handoffs/po-to-qa-gate-1.5-2026-04-23.yaml (consumed)
+
+story:
+  id: '1.5'
+  title: Professional Profile Setup
+  current_status: 'Ready for Review (photo upload deferred — see Dev Agent Record)'
+  target_status: Done
+  gate_verdict: CONCERNS
+  gate_file: docs/qa/gates/1.5-professional-profile-setup.yml
+  accept_with_concerns: true
+
+rationale: |
+  6/7 AC atendidas; AC2 e AC6 parciais mas com mitigação server-side
+  importante (bucket enforça 512KB + MIME whitelist); AC7 WAIVED seguindo
+  padrão Epic 1. 6 tech-debt items rastreados em docs/qa/backlog.md:
+  - REQ-001 (medium) + REQ-002 (low): photo upload UI (pareados)
+  - TEST-001 (medium): E2E Playwright (pareado com 1.6/1.7)
+  - TEST-002 (low): Vitest actions coverage
+  - MNT-001 (low): TOCTOU limit 1-20
+  - DOC-001 (low): README storage docs
+
+  Descoberta relevante do gate: AC6 está melhor do que a avaliação
+  inicial — file_size_limit=524288 + allowed_mime_types no bucket
+  garantem que qualquer upload via API respeita 500KB. UI client-side
+  é que está deferida.
+
+  Story 2.3 já construiu em cima da 1.5 via public_professionals_v sem
+  regressão — confirma estabilidade da 1.5.
+
+action_required:
+  primary: '@po *close-story 1.5'
+  steps:
+    - 'Atualizar Status: "Ready for Review" → "Done"'
+    - 'Adicionar entrada no Change Log registrando close com CONCERNS + referência ao gate file'
+    - 'Marcar este handoff como consumed: true'
+
+after_close:
+  epic: Epic 1 (Foundation & Salon Onboarding)
+  final_state: Complete
+  progress: '7/7 active stories Done + Story 1.8 formalmente Backlog (deferida pelo Founder)'
+  files_to_update:
+    - docs/prd/epic-1-foundation-salon-onboarding.md (adicionar cabeçalho Status: Complete)
+  announcement_candidate: |
+    Epic 1 complete! 7 stories shipped, 1 deferred (SMTP custom — backlog
+    formal). Tech debt total: 14 items (1 done + 12 open + 1 escalated
+    para Lighthouse CI). Sprint 2.A (Epic 2 core booking loop) segue
+    sem bloqueio com Story 2.3 em desenvolvimento.
+
+signatures:
+  qa_reviewer: Quinn (Test Architect)
+  qa_review_date: '2026-04-23'
