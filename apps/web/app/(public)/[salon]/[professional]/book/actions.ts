@@ -66,7 +66,10 @@ const createBookingSchema = z.object({
   salonSlug: z.string().min(1),
   professionalSlug: z.string().min(1),
   serviceId: z.string().uuid(),
-  scheduledAt: z.string().datetime(),
+  // Zod 4's default .datetime() requires `Z` suffix and rejects explicit
+  // offsets like `+00:00`. PostgREST serializes TIMESTAMPTZ with `+00:00`,
+  // which was silently failing every submission until this fix.
+  scheduledAt: z.string().datetime({ offset: true }),
   clientName: z.string().trim().min(2).max(120),
   clientEmail: z.string().email().max(254),
   clientPhone: z.string().min(8),
@@ -91,6 +94,8 @@ export async function createBooking(
         fieldErrors[key] = issue.message;
       }
     }
+    console.error('[createBooking] Zod validation failed', { fieldErrors });
+
     const consentIssue = parsed.error.issues.find(
       (i) => i.path[0] === 'lgpdConsent',
     );
@@ -102,7 +107,24 @@ export async function createBooking(
         fieldErrors,
       };
     }
-    return { ok: false, error: 'Dados inválidos', fieldErrors };
+
+    // Surface validation hints for fields that don't map to a visible input
+    // (serviceId, scheduledAt, salonSlug, professionalSlug) — otherwise the
+    // user sees only "Dados inválidos" with no field highlighted.
+    const visibleFields = new Set([
+      'clientName',
+      'clientEmail',
+      'clientPhone',
+      'lgpdConsent',
+    ]);
+    const orphanHints = Object.entries(fieldErrors)
+      .filter(([key]) => !visibleFields.has(key))
+      .map(([key, msg]) => `${key}: ${msg}`);
+    const errorMessage =
+      orphanHints.length > 0
+        ? `Dados inválidos (${orphanHints.join('; ')})`
+        : 'Dados inválidos';
+    return { ok: false, error: errorMessage, fieldErrors };
   }
 
   const normalizedPhone = normalizePhoneBR(parsed.data.clientPhone);
