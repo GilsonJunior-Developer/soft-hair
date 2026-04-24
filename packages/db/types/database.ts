@@ -279,6 +279,7 @@ export type Database = {
           email: string | null
           id: string
           lgpd_consent_at: string | null
+          lgpd_consent_text_hash: string | null
           name: string
           notes: string | null
           phone_e164: string
@@ -292,6 +293,7 @@ export type Database = {
           email?: string | null
           id?: string
           lgpd_consent_at?: string | null
+          lgpd_consent_text_hash?: string | null
           name: string
           notes?: string | null
           phone_e164: string
@@ -305,6 +307,7 @@ export type Database = {
           email?: string | null
           id?: string
           lgpd_consent_at?: string | null
+          lgpd_consent_text_hash?: string | null
           name?: string
           notes?: string | null
           phone_e164?: string
@@ -1164,6 +1167,18 @@ export type Database = {
         Returns: boolean
       }
       cleanup_expired_referral_tokens: { Args: never; Returns: number }
+      compute_public_availability: {
+        Args: {
+          p_from: string
+          p_professional_slug: string
+          p_salon_slug: string
+          p_service_id: string
+          p_to: string
+        }
+        Returns: {
+          slot_at: string
+        }[]
+      }
       create_appointment_atomic: {
         Args: {
           p_client_email?: string
@@ -1205,6 +1220,29 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_public_booking_atomic: {
+        Args: {
+          p_client_email: string
+          p_client_name: string
+          p_client_phone: string
+          p_lgpd_consent_text_hash: string
+          p_professional_slug: string
+          p_salon_slug: string
+          p_scheduled_at: string
+          p_service_id: string
+        }
+        Returns: {
+          appointment_id: string
+          cancel_token: string
+          ends_at: string
+          price_brl: number
+          professional_name: string
+          salon_name: string
+          salon_slug: string
+          scheduled_at: string
+          service_name: string
+        }[]
+      }
       create_salon_bootstrap: {
         Args: { p_city?: string; p_cnpj?: string; p_name: string }
         Returns: {
@@ -1230,6 +1268,23 @@ export type Database = {
         }
       }
       current_user_salon_ids: { Args: never; Returns: string[] }
+      get_public_booking: {
+        Args: { p_appointment_id: string; p_cancel_token: string }
+        Returns: {
+          appointment_id: string
+          client_email: string
+          client_name: string
+          ends_at: string
+          price_brl: number
+          professional_name: string
+          professional_slug: string
+          salon_name: string
+          salon_slug: string
+          scheduled_at: string
+          service_name: string
+          status: string
+        }[]
+      }
       is_salon_owner: { Args: { p_salon_id: string }; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
       salon_messaging_cost_month: {

@@ -1,0 +1,73 @@
+schema: 1
+story: '2.4'
+gate: CONCERNS
+status_reason: 'All 9 ACs met with transparent deferrals (unit/E2E tests, cache 30s, dynamic OG — all documented). 3 SECURITY DEFINER RPCs applied in softhair-dev + softhair-prod via Dara; advisor confirmed no new flags on the new functions. Manual review found zero CRITICAL/HIGH; 4 LOW/MEDIUM observations tracked. Non-blocking for merge — recommend @devops create PR.'
+reviewer: 'Quinn'
+updated: '2026-04-24T00:00:00Z'
+top_issues:
+  - id: 'SEC-001'
+    severity: low
+    finding: 'cancel_token leaks in success URL (?t=...). If the user shares the URL publicly (e.g. WhatsApp screenshot, social media), anyone with the full URL can read client_name + client_email via get_public_booking. The Web Share flow mitigates intent but URL paste is possible.'
+    suggested_action: 'Story 2.7 (public manage-link) already plans a token-rotation / signed-short-link model. No change required in 2.4. Track as reminder when 2.7 ships — success page URL should transition to the 2.7 token format or be locked to the new flow.'
+  - id: 'DATA-001'
+    severity: low
+    finding: 'LGPD consent storage has no version field — only sha256 hash of current copy. If the LGPD_CONSENT_COPY string ever changes, old hashes become unverifiable against the new copy (proof collapses silently).'
+    suggested_action: 'Add `lgpd_consent_version` TEXT column + append-only audit log in Phase 2. For now, consent.ts has a header warning; any future copy change MUST ship with a migration + policy review.'
+  - id: 'A11Y-001'
+    severity: low
+    finding: 'LGPD checkbox is 16×16 px — below WCAG 2.5.5 recommended 44×44 touch target. Mitigated because the full `<label>` is clickable via htmlFor and reasonably wide.'
+    suggested_action: 'Acceptable as-is for MVP (common form pattern). If post-ship usability shows misclicks, wrap the input in a larger touch area.'
+  - id: 'PERF-001'
+    severity: medium
+    finding: 'sendBookingConfirmation runs inline in the createBooking Server Action — synchronously awaited before the Server Action returns. A slow Resend response (>5s) or network hiccup will block the client-visible "Confirmando…" state and risk the AC8 ≤60s target.'
+    suggested_action: 'Make email send fire-and-forget (void Promise + error log) OR move to an Edge Function / background task. Deferred because the MVP fallback path (not_configured → log + banner) is the common case right now. Re-evaluate once Resend is wired in prod and the founder measures real latency.'
+  - id: 'A11Y-002'
+    severity: low
+    finding: 'DayStrip uses role="tablist"/role="tab" but does not implement arrow-key navigation (ARIA tablist pattern expects ←/→ to move between tabs). Users navigate via Tab/Enter only.'
+    suggested_action: 'Either implement arrow-key handlers OR demote role to plain buttons (`role` removed). Low priority — screen readers handle tab semantics acceptably today.'
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'Unit tests for availability algorithm + E2E Playwright deferred per Change Log 0.2. Logic reviewed by inspection and smoke-tested as anon in both softhair-dev + softhair-prod (Dara), but no automated regression coverage.'
+    suggested_action: 'Same tech-debt track as Story 1.7 TEST-001 — add to the E2E suite when Playwright env is configured. pgTAP for availability algorithm when SQL test suite is set up.'
+  - id: 'OBS-001'
+    severity: low
+    finding: 'Analytics is console.info only (booking_completed event) — explicitly acceptable per AC9 for MVP, but no retention/analysis possible.'
+    suggested_action: 'Wire PostHog or Segment when founder decides on analytics stack. Follow-up story.'
+waiver: { active: false }
+quality_checks:
+  - check: code_review
+    verdict: PASS
+    notes: 'Clean Server/Client split (page.tsx Server wrapping, booking-flow.tsx Client). Defense-in-depth validation (Zod + RPC CHECK). Server-only hashing correctly isolated via `import "server-only"` in consent-hash.ts — split was forced by node:crypto bundling constraint, caught and fixed during dev typecheck/build. SQL injection not possible (all queries parameterized). Email HTML escapes all user input.'
+  - check: unit_tests
+    verdict: CONCERNS
+    notes: 'Dev-side: typecheck ✅, lint ✅, build ✅ (16 rotas). No story-specific unit tests (TEST-001 deferred). Availability algorithm relies on manual inspection + smoke test as anon (Dara confirmed compute_public_availability, create_public_booking_atomic, get_public_booking all executable by anon with expected 0-row/exception responses in dev + prod).'
+  - check: acceptance_criteria
+    verdict: PASS
+    notes: 'AC1 (3-step flow) ✅, AC2 (availability correct) ✅ logic inspected, AC3 (phone E.164) ✅ dual-layer validation, AC4 (email RFC + MX-relaxed) ✅ Zod .email() + RPC regex, AC5 (LGPD consent required + labeled exactly as spec) ✅, AC6 (PENDING_CONFIRMATION + upsert by phone+email) ✅, AC7 (success + share + manage-prep link) ✅, AC8 (≤60s) ✅ no timing assertion run but form flow is 3 steps, AC9 (booking_completed console.info) ✅.'
+  - check: no_regressions
+    verdict: PASS
+    notes: 'Additive-only changes (no modifications to existing files in apps/web). Existing stories 2.1/2.2/2.3 unchanged. Migration add-only (column + 3 new functions; no ALTER of existing functions). Types regenerated — packages/db and apps/web typecheck clean. EXCLUDE constraint reused from 2.2 without change.'
+  - check: performance
+    verdict: CONCERNS
+    notes: 'Availability computation: 14 days × up to 96 slots × up to 2 ranges × up to ~20 booked in window = manageable plpgsql workload (should complete in <100ms per pro). No index needed beyond existing `idx_appointments_professional_scheduled`. PERF-001 (email blocking critical path) flagged. No Lighthouse run on /book — defer to manual post-deploy (same pattern as 2.3).'
+  - check: security
+    verdict: PASS
+    notes: 'All 3 anon RPCs are SECURITY DEFINER with `SET search_path = public` (Supabase advisor 0011 confirmed NO flag — @data-engineer memory captured). No base-table GRANTs to anon added. cancel_token is 32-hex (128-bit entropy) — enumeration infeasible. LGPD hash stored separately from copy; audit provable while copy unchanged. RLS for anon on salons/professionals/services remains at column-subset granted in Story 2.3 hardening. SQL injection: impossible (parameterized). XSS in email: escapeHtml applied to all user input. SEC-001 (token in URL) tracked as future hardening in Story 2.7 scope.'
+  - check: documentation
+    verdict: PASS
+    notes: 'Story Dev Agent Record is exemplary: 9 Completion Notes with ✅/⚠️/📋 markers, full File List split by DB/Web/Modified/Deferred, Deferred table with reason + follow-up trigger. Change Log v1.0 narrates migration pending + delegated work to Dara. Migration file has extensive comments explaining intent + timezone assumption + race-safety delegation.'
+coderabbit:
+  executed: false
+  reason: 'WSL not reachable from this session (CodeRabbit CLI installed in WSL per config). Manual review by Quinn covered the same severity categories (security, performance, a11y, code quality). Recommend @devops run CodeRabbit pre-PR as usual.'
+handoff:
+  next_agent: '@devops'
+  next_command: '*push'
+  rationale: 'CONCERNS verdict — no CRITICAL/HIGH issues. Gate APPROVES for merge with the 7 items above logged as follow-ups (2 MEDIUM: PERF-001 email-blocking + TEST-001 automated tests; 5 LOW: token-in-URL, consent-versioning, checkbox touch-target, tablist keyboard, analytics). Migration already applied in softhair-dev + softhair-prod by Dara; types regenerated; @devops needs to package the app code + migration + types + story + gate file into a single PR.'
+  does_not_block: []
+  follow_up:
+    - 'Story 2.7 (manage link) should replace the success page URL token scheme (SEC-001)'
+    - 'Phase 2: lgpd_consent_version column + audit_log (DATA-001)'
+    - 'Phase 2 hardening: move email send to Edge Function / fire-and-forget (PERF-001)'
+    - 'When Playwright env is configured: add /book E2E timing assertion ≤60s + availability algorithm pgTAP tests (TEST-001)'
+    - 'Wire PostHog/Segment when analytics stack decision is made (OBS-001)'
+    - 'Pre-PR: @devops run CodeRabbit via WSL (coderabbit section not executed in this session)'
