@@ -50,3 +50,7 @@ Thumbs.db
 supabase/.branches/
 supabase/.temp/
 supabase/logs/
+
+# Founder personal tooling (hardcoded paths)
+docs/sync-obsidian.py
+docs/.sync-cache.txt
