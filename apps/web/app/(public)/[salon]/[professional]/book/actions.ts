@@ -6,6 +6,7 @@ import { normalizePhoneBR } from '@/lib/phone';
 import { LGPD_CONSENT_COPY } from '@/lib/booking/consent';
 import { hashConsentCopy } from '@/lib/booking/consent-hash';
 import { sendBookingConfirmation } from '@/lib/email';
+import { signAppointmentToken } from '@/lib/appointment-token';
 
 export type ActionResult<T = undefined> =
   | (T extends undefined ? { ok: true } : { ok: true; data: T })
@@ -78,7 +79,12 @@ const createBookingSchema = z.object({
 
 export type CreateBookingResult = {
   appointmentId: string;
-  cancelToken: string;
+  /**
+   * JWT (HS256) signed for the `/agendamento/{token}` management route (Story 2.7).
+   * Replaces the Story 2.4 initial scheme that exposed `cancel_token` in the
+   * URL searchParam — resolves 2.4-SEC-001 (token-in-URL PII leak risk).
+   */
+  manageToken: string;
   emailDelivered: boolean;
 };
 
@@ -215,9 +221,17 @@ export async function createBooking(
     source: 'PUBLIC_LINK',
   });
 
-  const manageUrl = absoluteUrl(
-    `/${row.salon_slug}/${parsed.data.professionalSlug}/book/success/${row.appointment_id}?t=${row.cancel_token}`,
-  );
+  // Story 2.7: sign a short-lived JWT for the manage route. The JWT carries
+  // the cancel_token as a claim so the RPCs can validate the pair — defense
+  // in depth against both token tampering (signature) and UUID guessing
+  // (wrong ct).
+  const manageToken = await signAppointmentToken({
+    appointmentId: row.appointment_id,
+    cancelToken: row.cancel_token,
+    scheduledAt: new Date(row.scheduled_at),
+  });
+
+  const manageUrl = absoluteUrl(`/agendamento/${manageToken}`);
 
   const emailResult = await sendBookingConfirmation({
     to: parsed.data.clientEmail,
@@ -233,7 +247,7 @@ export async function createBooking(
     ok: true,
     data: {
       appointmentId: row.appointment_id,
-      cancelToken: row.cancel_token,
+      manageToken,
       emailDelivered: emailResult.delivered,
     },
   };

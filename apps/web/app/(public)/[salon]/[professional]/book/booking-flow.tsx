@@ -546,12 +546,15 @@ function ContactStep({
         setFormError(res.error);
         return;
       }
-      const { appointmentId, cancelToken, emailDelivered } = res.data;
-      const params = new URLSearchParams({ t: cancelToken });
+      const { manageToken, emailDelivered } = res.data;
+      // Story 2.7: redirect to the JWT-gated manage page. `justCreated=1`
+      // triggers the success banner on the manage screen. When email delivery
+      // fell back to the local log, we still land the user on the same page
+      // — the manage route is self-sufficient (it's what the email link
+      // would have pointed to anyway).
+      const params = new URLSearchParams({ justCreated: '1' });
       if (!emailDelivered) params.set('email', 'pending');
-      router.push(
-        `/${salonSlug}/${professionalSlug}/book/success/${appointmentId}?${params.toString()}`,
-      );
+      router.push(`/agendamento/${manageToken}?${params.toString()}`);
     });
   };
 
