@@ -1,0 +1,43 @@
+from_agent: po
+to_agent: sm
+last_command: close-story
+story: "2.4"
+timestamp: "2026-04-24T00:00:00Z"
+consumed: false
+
+context:
+  just_closed: "2.4 Client-Facing Self-Booking (Done via PR #23 / b1d7651)"
+  epic_progress:
+    epic_id: 2
+    epic_name: "Booking Experience"
+    total: 7
+    done: 5
+    done_list: ["2.1", "2.2", "2.3", "2.4", "2.6"]
+    remaining: ["2.5", "2.7"]
+    percent_complete: 71
+
+recommended_next: "2.7"
+recommendation_rationale: |
+  Story 2.7 (Client Appointment Management) é a próxima candidata mais forte por 3 razões:
+
+  1. Fecha o loop do booking público iniciado na 2.4 — o cliente precisa de um jeito de
+     gerenciar/cancelar o agendamento que ele acabou de criar
+  2. Destrava 2.4-SEC-001 (backlog item MEDIUM) — o signed short-link da 2.7 substitui o
+     scheme atual `cancel_token` via searchParam que pode vazar PII se URL for compartilhada
+     publicamente. Não resolver a 2.7 cedo significa deixar a 2.4 parcialmente endurecida
+  3. Cancel window + status transitions já existem via RPC transition_appointment_status
+     (Story 2.6 done) — a 2.7 é principalmente UI pública + token validation flow
+
+alternative: "2.5"
+alternative_rationale: |
+  Story 2.5 (Client History) é válida se a prioridade for construir riqueza do dashboard
+  interno. Mas não destrava nenhum item do backlog, então recomendação forte é 2.7 primeiro.
+
+blockers:
+  - none
+
+waivers_to_preserve:
+  - "2.4 waivers v1.0 permanecem: Task 1.6 (cache 30s), 7.4 (manage-link depende desta), 10 (unit tests), 11 (E2E Playwright)"
+  - "2.4 QA follow-ups em docs/qa/backlog.md — PERF-001 + TEST-001 + SEC-001 + DATA-001 + A11Y-001/002 + OBS-001"
+
+suggested_command: "*draft 2.7"
