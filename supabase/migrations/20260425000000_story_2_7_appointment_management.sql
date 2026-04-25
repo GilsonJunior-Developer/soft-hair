@@ -342,8 +342,21 @@ GRANT EXECUTE ON FUNCTION public.reschedule_public_appointment(UUID, TEXT, TIMES
 --    here ensures that any cached/bookmarked URL from the brief window
 --    when 2.4 was live cannot be used to read client PII anymore.
 --    `authenticated` keeps access (internal tooling may still call it).
+--
+--    GOTCHA: PostgreSQL grants `EXECUTE TO PUBLIC` on every function
+--    by default at CREATE time. The original migration's
+--    `GRANT EXECUTE ... TO anon` was redundant — anon already had it
+--    via PUBLIC. Just `REVOKE FROM anon` is therefore a no-op (the
+--    inherited grant from PUBLIC remains). Must REVOKE FROM PUBLIC to
+--    actually deny anon. Caught during dev apply on 2026-04-25 by Dara
+--    via has_function_privilege() check.
 -- ----------------------------------------------------------
+REVOKE EXECUTE ON FUNCTION public.get_public_booking(UUID, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.get_public_booking(UUID, TEXT) FROM anon;
+-- Re-grant to authenticated explicitly (PUBLIC revoke removed the
+-- inherited path; authenticated had its own explicit grant from the
+-- 2.4 migration but adding here makes intent crystal clear).
+GRANT  EXECUTE ON FUNCTION public.get_public_booking(UUID, TEXT) TO authenticated;
 
 COMMENT ON FUNCTION public.get_public_booking(UUID, TEXT) IS
   'DEPRECATED by Story 2.7 (2026-04-24). Use public.get_public_appointment instead. Anon access revoked to close 2.4-SEC-001 (token-in-URL PII leak risk). Still reachable from authenticated context.';
