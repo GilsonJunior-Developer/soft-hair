@@ -1,28 +1,28 @@
 /**
  * Transactional email delivery for SoftHair.
  *
- * Strategy (Story 2.4 MVP):
+ * Strategy:
  *   - If RESEND_API_KEY + RESEND_FROM_EMAIL are set, send via Resend
  *   - Otherwise log structured email payload and return { delivered: false }
- *     (UI shows a banner informing the client that email is still being configured)
+ *     (flow never breaks; UI surfaces a banner where appropriate)
  *
- * Story 2.7 will replace the placeholder management link with a signed
- * token route; until then we link to the success page.
+ * Templates:
+ *   - sendBookingConfirmation     (Story 2.4 — booking created)
+ *   - sendAppointmentCanceled     (Story 2.7 — client-initiated cancel)
+ *   - sendAppointmentRescheduled  (Story 2.7 — client-initiated reschedule)
+ *
+ * Design: this module is pure (no DB access). Each Server Action loads
+ * the snapshot data via its RPC call and passes it here. Keeps the email
+ * layer independent of auth/RLS concerns.
  */
-
-export type BookingEmailInput = {
-  to: string;
-  clientName: string;
-  salonName: string;
-  professionalName: string;
-  serviceName: string;
-  scheduledAt: Date;
-  manageUrl: string;
-};
 
 export type EmailDeliveryResult =
   | { delivered: true; providerMessageId: string }
-  | { delivered: false; reason: 'not_configured' | 'provider_error'; detail?: string };
+  | {
+      delivered: false;
+      reason: 'not_configured' | 'provider_error' | 'no_recipient';
+      detail?: string;
+    };
 
 function formatDateTimeBR(d: Date): string {
   return d.toLocaleString('pt-BR', {
@@ -35,32 +35,6 @@ function formatDateTimeBR(d: Date): string {
   });
 }
 
-function renderBookingEmailHtml(input: BookingEmailInput): string {
-  const when = formatDateTimeBR(input.scheduledAt);
-  return `
-    <div style="font-family:system-ui,-apple-system,sans-serif;color:#111">
-      <h2 style="margin:0 0 16px">Agendamento recebido</h2>
-      <p>Olá, <strong>${escapeHtml(input.clientName)}</strong>.</p>
-      <p>
-        Seu agendamento no <strong>${escapeHtml(input.salonName)}</strong>
-        com <strong>${escapeHtml(input.professionalName)}</strong> foi recebido
-        e está aguardando confirmação do salão.
-      </p>
-      <ul>
-        <li>Serviço: <strong>${escapeHtml(input.serviceName)}</strong></li>
-        <li>Quando: <strong>${escapeHtml(when)}</strong></li>
-      </ul>
-      <p>
-        Você pode acompanhar ou gerenciar este agendamento pelo link abaixo:<br />
-        <a href="${input.manageUrl}">${input.manageUrl}</a>
-      </p>
-      <p style="color:#6b7280;font-size:12px;margin-top:24px">
-        Se você não reconhece este agendamento, ignore este email.
-      </p>
-    </div>
-  `;
-}
-
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -70,20 +44,18 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export async function sendBookingConfirmation(
-  input: BookingEmailInput,
-): Promise<EmailDeliveryResult> {
+async function deliver(params: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<EmailDeliveryResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL;
 
   if (!apiKey || !fromEmail) {
-    console.info('[email] Booking confirmation (not sent — Resend not configured)', {
-      to: input.to,
-      salon: input.salonName,
-      professional: input.professionalName,
-      service: input.serviceName,
-      when: input.scheduledAt.toISOString(),
-      manageUrl: input.manageUrl,
+    console.info('[email] Not sent — Resend not configured', {
+      to: params.to,
+      subject: params.subject,
     });
     return { delivered: false, reason: 'not_configured' };
   }
@@ -97,9 +69,9 @@ export async function sendBookingConfirmation(
       },
       body: JSON.stringify({
         from: fromEmail,
-        to: input.to,
-        subject: `Seu agendamento em ${input.salonName} com ${input.professionalName}`,
-        html: renderBookingEmailHtml(input),
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
       }),
     });
 
@@ -123,4 +95,154 @@ export async function sendBookingConfirmation(
       detail: err instanceof Error ? err.message : 'unknown',
     };
   }
+}
+
+/* ------------------------------------------------------------
+ * sendBookingConfirmation — Story 2.4 (manageUrl updated for 2.7)
+ * manageUrl now points to /agendamento/{jwt}, not /book/success
+ * ------------------------------------------------------------*/
+
+export type BookingEmailInput = {
+  to: string;
+  clientName: string;
+  salonName: string;
+  professionalName: string;
+  serviceName: string;
+  scheduledAt: Date;
+  manageUrl: string;
+};
+
+export async function sendBookingConfirmation(
+  input: BookingEmailInput,
+): Promise<EmailDeliveryResult> {
+  const when = formatDateTimeBR(input.scheduledAt);
+  const html = `
+    <div style="font-family:system-ui,-apple-system,sans-serif;color:#111">
+      <h2 style="margin:0 0 16px">Agendamento recebido</h2>
+      <p>Olá, <strong>${escapeHtml(input.clientName)}</strong>.</p>
+      <p>
+        Seu agendamento no <strong>${escapeHtml(input.salonName)}</strong>
+        com <strong>${escapeHtml(input.professionalName)}</strong> foi recebido
+        e está aguardando confirmação do salão.
+      </p>
+      <ul>
+        <li>Serviço: <strong>${escapeHtml(input.serviceName)}</strong></li>
+        <li>Quando: <strong>${escapeHtml(when)}</strong></li>
+      </ul>
+      <p>
+        Você pode gerenciar (cancelar ou reagendar) pelo link abaixo:<br />
+        <a href="${input.manageUrl}">${input.manageUrl}</a>
+      </p>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">
+        Guarde este email — o link é único e pessoal. Se você não reconhece
+        este agendamento, ignore esta mensagem.
+      </p>
+    </div>
+  `;
+
+  return deliver({
+    to: input.to,
+    subject: `Seu agendamento em ${input.salonName} com ${input.professionalName}`,
+    html,
+  });
+}
+
+/* ------------------------------------------------------------
+ * sendAppointmentCanceled — Story 2.7
+ * ------------------------------------------------------------*/
+
+export type AppointmentCanceledInput = {
+  to: string | null;
+  clientName: string;
+  salonName: string;
+  professionalName: string;
+  serviceName: string;
+  scheduledAt: Date;
+};
+
+export async function sendAppointmentCanceled(
+  input: AppointmentCanceledInput,
+): Promise<EmailDeliveryResult> {
+  if (!input.to) {
+    console.info('[email] Cancel notification skipped — client email missing');
+    return { delivered: false, reason: 'no_recipient' };
+  }
+
+  const when = formatDateTimeBR(input.scheduledAt);
+  const html = `
+    <div style="font-family:system-ui,-apple-system,sans-serif;color:#111">
+      <h2 style="margin:0 0 16px">Agendamento cancelado</h2>
+      <p>Olá, <strong>${escapeHtml(input.clientName)}</strong>.</p>
+      <p>
+        Confirmamos o cancelamento do seu agendamento no
+        <strong>${escapeHtml(input.salonName)}</strong> com
+        <strong>${escapeHtml(input.professionalName)}</strong>.
+      </p>
+      <ul>
+        <li>Serviço: <strong>${escapeHtml(input.serviceName)}</strong></li>
+        <li>Quando era: <strong>${escapeHtml(when)}</strong></li>
+      </ul>
+      <p>
+        Precisando remarcar, é só acessar o perfil do profissional novamente.
+      </p>
+    </div>
+  `;
+
+  return deliver({
+    to: input.to,
+    subject: `Cancelamento confirmado — ${input.salonName}`,
+    html,
+  });
+}
+
+/* ------------------------------------------------------------
+ * sendAppointmentRescheduled — Story 2.7
+ * ------------------------------------------------------------*/
+
+export type AppointmentRescheduledInput = {
+  to: string | null;
+  clientName: string;
+  salonName: string;
+  professionalName: string;
+  serviceName: string;
+  scheduledAt: Date;
+  manageUrl: string;
+};
+
+export async function sendAppointmentRescheduled(
+  input: AppointmentRescheduledInput,
+): Promise<EmailDeliveryResult> {
+  if (!input.to) {
+    console.info('[email] Reschedule notification skipped — client email missing');
+    return { delivered: false, reason: 'no_recipient' };
+  }
+
+  const when = formatDateTimeBR(input.scheduledAt);
+  const html = `
+    <div style="font-family:system-ui,-apple-system,sans-serif;color:#111">
+      <h2 style="margin:0 0 16px">Agendamento reagendado</h2>
+      <p>Olá, <strong>${escapeHtml(input.clientName)}</strong>.</p>
+      <p>
+        Seu novo horário no <strong>${escapeHtml(input.salonName)}</strong>
+        com <strong>${escapeHtml(input.professionalName)}</strong> foi salvo.
+      </p>
+      <ul>
+        <li>Serviço: <strong>${escapeHtml(input.serviceName)}</strong></li>
+        <li>Novo horário: <strong>${escapeHtml(when)}</strong></li>
+      </ul>
+      <p>
+        Gerencie (ou cancele, se precisar) pelo novo link:<br />
+        <a href="${input.manageUrl}">${input.manageUrl}</a>
+      </p>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">
+        O link anterior foi invalidado. Use apenas este.
+      </p>
+    </div>
+  `;
+
+  return deliver({
+    to: input.to,
+    subject: `Novo horário — ${input.salonName}`,
+    html,
+  });
 }

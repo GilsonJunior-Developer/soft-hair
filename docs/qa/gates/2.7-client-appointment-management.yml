@@ -1,0 +1,111 @@
+schema: 1
+story: '2.7'
+gate: CONCERNS
+status_reason: 'All 7 ACs met. JWT auth design is exemplary (HS256 + audience-scoped + ct claim defense-in-depth + cache invalidation by raw secret). 2.4-SEC-001 verifiably closed in prod (anon EXECUTE on get_public_booking returns false via has_function_privilege). 4 LOW observations tracked. Manual smoke pending on Vercel preview — only real blocker before merge. Recommend merge after Founder smoke confirms.'
+reviewer: 'Quinn'
+updated: '2026-04-25T00:00:00Z'
+top_issues:
+  - id: 'SMOKE-001'
+    severity: high
+    finding: |
+      End-to-end manual smoke on Vercel preview is still pending. I attempted automated HTTP-level smoke from terminal but the preview deploy
+      (https://soft-hair-web-git-feat-ab7387-gilsonjunior-developers-projects.vercel.app) is gated behind Vercel Authentication — every request
+      returns 401 without a session cookie or VERCEL_AUTOMATION_BYPASS_SECRET. This is correct/expected security posture for Pro/Team plans; not
+      a bug. But it means I cannot programmatically verify: (a) the new build picked up APPOINTMENT_TOKEN_SECRET, (b) routes /agendamento/[token]
+      and /agendamento/[token]/reagendar return 200, (c) the retired /book/success/* now 404s, (d) the booking flow redirects to /agendamento/{jwt}.
+      DB-level smoke I CAN do is already covered in this gate (privilege check + RPC signature check + advisor scan).
+    suggested_action: |
+      Founder runs the visual smoke on the Vercel preview URL (browser session authenticates automatically). Either:
+      (a) Run the full flow: book → check Vercel runtime logs for "/agendamento/" in the email payload → click manage URL → cancel + reschedule. If green, signal @devops Gage to merge.
+      (b) Alternatively, configure VERCEL_AUTOMATION_BYPASS_SECRET in Vercel and share the bypass URL pattern, so future @qa cycles can execute headless smoke against gated previews. Phase 2 hardening for QA productivity.
+  - id: 'SEC-001-CLOSURE'
+    severity: low
+    finding: '2.4-SEC-001 (the legacy token-in-URL PII leak risk that motivated this story) is verifiably closed at the DB layer. has_function_privilege(anon, public.get_public_booking, EXECUTE) returns false in softhair-prod. Web layer cooperates: /book/success route deleted, booking flow redirects to /agendamento/{jwt}.'
+    suggested_action: 'Mark 2.4-SEC-001 as done in docs/qa/backlog.md (this gate is the evidence). Done in this gate output.'
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'No E2E coverage. Unit tests are strong (5 JWT round-trip/tampered/expired/rotated/garbage + 9 cancel-window boundaries, 14 total new). But the highest-risk surface in this story — the JWT verify→RPC→email pipeline — is uncovered by automated tests end-to-end. Same systemic gap as 1.5/1.6/1.7/2.4-TEST-001.'
+    suggested_action: 'Same tech-debt track. Story 2.7 is the natural candidate for the first E2E spec when Playwright env is set up. Backlog entry created.'
+  - id: 'OBS-001'
+    severity: low
+    finding: 'translateRpcError uses regex /DETAIL:\\s*(\\d+)/ to extract window_hours from the Postgres error message in cancel/reschedule failures. Brittle if Postgres ever changes its error formatting (rare but possible across versions).'
+    suggested_action: 'Phase 2 hardening: structure the RPC error to put window_hours in a dedicated HINT field, OR return the value as part of a discriminated payload instead of inside the message. Not blocking — current implementation works against current Supabase Postgres 17.6.'
+  - id: 'PERF-001'
+    severity: low
+    finding: 'cancelViaToken makes two RPC round-trips: one to get_public_appointment for the email snapshot, then to cancel_public_appointment. Doable in one call by extending the cancel RPC to also return summary fields (similar to what reschedule_public_appointment already does).'
+    suggested_action: 'Phase 2 optimization. Current latency is acceptable (both RPCs are simple key lookups + EXCLUDE-protected UPDATE). Re-evaluate if cancel volume grows.'
+  - id: 'CODE-001'
+    severity: low
+    finding: '_setSecretForTesting and _clearSecretCache are exported from lib/appointment-token.ts without a NODE_ENV guard. Convention prefix _ is documentation only; nothing prevents accidental usage in non-test code paths.'
+    suggested_action: 'Defense-in-depth would wrap these with `if (process.env.NODE_ENV !== "test") throw ...`. Optional polish — current usage is restricted to the *.test.ts file by convention.'
+  - id: 'ENV-001'
+    severity: low
+    finding: 'absoluteUrl falls back to localhost:3000 if neither NEXT_PUBLIC_SITE_URL nor VERCEL_URL is set. In a non-Vercel non-localhost prod environment this would silently produce broken email links. Vercel is the configured deploy target so this is fine today.'
+    suggested_action: 'Optional: throw or warn loudly if neither var is set in prod. Phase 2 if the deploy story changes.'
+waiver: { active: false }
+quality_checks:
+  - check: code_review
+    verdict: PASS
+    notes: |
+      Exemplary JWT design: HS256 + audience-scoped (aud='booking') + algorithms allowlist on verify (rejects alg=none) + cancel_token as claim (defense-in-depth) + extractable=false on importKey + secret length guard (>=32 chars) + cache invalidation by raw value (rotation works automatically).
+      Server Actions cleanly separate verify → snapshot → mutate → email phases. Discriminated union return types (ActionResult<T>) keep error handling explicit.
+      DB RPCs use FOR UPDATE locks, RAISE EXCEPTION with structured MESSAGE/DETAIL for caller translation, COALESCE on settings_jsonb access.
+      reschedule_public_appointment correctly inherits race-safety from EXCLUDE constraint (Story 2.2) + atomic cancel-old-create-new in single transaction.
+      booking-flow.tsx integration is surgical (1 import, 1 redirect change, no leftover references to the deleted success route).
+  - check: unit_tests
+    verdict: CONCERNS
+    notes: |
+      14 new tests passing (21/21 total): JWT round-trip, tampered signature, expired exp, rotated secret, garbage input; cancel-window boundary cases (default, 0h, 1h, negative invalid). Forced @vitest-environment node on the JWT test (jose v6 needs full WebCrypto, jsdom partial).
+      Gap: no integration test of the full Server Action pipeline (verify → snapshot → cancel/reschedule → email). Same systemic gap as 1.5/1.6/1.7/2.4 — TEST-001 tech-debt track.
+  - check: acceptance_criteria
+    verdict: PASS
+    notes: |
+      AC 1 (unique URL via email) ✅ sendBookingConfirmation.manageUrl now /agendamento/{jwt}
+      AC 2 (JWT exp = scheduled_at + 4h) ✅ signAppointmentToken line 69-70
+      AC 3 (page summary + Cancelar + Reagendar) ✅ page.tsx + AppointmentActions
+      AC 4 (cancel window from settings_jsonb, default 24h, blocks with clear message) ✅ DB validates + UI gates + Server Action returns translated copy
+      AC 5 (reschedule reuses 2.4 flow) ✅ reschedule-flow.tsx imports computeAvailability from 2.4
+      AC 6 (cancel updates status to CANCELED, frees slot, Realtime push) ✅ UPDATE status + revalidatePath
+      AC 7 (post-action confirms + suggests rescheduling) ✅ AppointmentActions dialog='done' state
+  - check: no_regressions
+    verdict: PASS
+    notes: |
+      Additive at the DB level (3 new RPCs, no ALTER on existing). The REVOKE FROM PUBLIC on get_public_booking was the only existing-function change — verified via has_function_privilege that authenticated still has access (internal tooling unaffected) while anon was correctly denied.
+      Web layer changes are minimal: book/actions.ts adds signAppointmentToken; booking-flow.tsx redirects to new URL; lib/email.ts extends with two new functions (refactored to pure — no behavior change for sendBookingConfirmation).
+      success route deletion is clean — no orphan imports remain (typecheck would fail, build would fail; both green).
+  - check: performance
+    verdict: PASS
+    notes: |
+      Lighthouse CI passed on the new public routes. No new index needed — all DB queries hit existing PK / unique indexes (cancel_token unique constraint, appointments PK, salons.slug unique).
+      Two RPC round-trips per cancel (snapshot + mutate) is the only minor inefficiency — flagged as PERF-001 LOW for Phase 2.
+  - check: security
+    verdict: PASS
+    notes: |
+      Multi-layer JWT validation (signature + audience + algorithms allowlist + claim type checks) means tampering at any layer fails closed.
+      ct claim provides defense-in-depth: tampered JWT → bad signature; guessed UUID → wrong cancel_token mismatch in DB.
+      Cancel window enforced at DB layer (RPC re-validates even if UI bypassed). Server-side time check, not client clock.
+      Token in path (not query string) — even shared URLs do not expose anything that get_public_booking could read (REVOKE FROM PUBLIC blocks anon entirely).
+      JWT exp tied to scheduled_at + 4h limits replay/leak window.
+      Email templates escape user input (escapeHtml on every interpolation). manageUrl built server-side from validated slugs + JWT.
+      2.4-SEC-001 closure verified via has_function_privilege() — empirical, not just inferred from the REVOKE statement.
+  - check: documentation
+    verdict: PASS
+    notes: |
+      Story has v1.0 implementation Change Log entry covering all 10 tasks + waivers + dependency cross-ref to 2.4-SEC-001. Dev Agent Record includes the jose v6 CryptoKey gotcha + the vitest jsdom-vs-node env override + the .next cache invalidation step. Migration file inline-comments the REVOKE FROM PUBLIC fix that Dara caught during apply (pattern future migrations should reuse). New memory captured (feedback_postgres_revoke_from_public.md).
+coderabbit:
+  executed: false
+  reason: 'WSL not reachable from this session (CodeRabbit CLI installed in WSL per config). Manual review by Quinn covered the same severity categories (security / performance / a11y / code-quality). @devops Gage may run CodeRabbit pre-merge from his own WSL-equipped environment as the final sanity check.'
+handoff:
+  next_agent: '@founder + @devops'
+  next_command: 'Founder smoke on Vercel preview → @devops *push (squash merge)'
+  rationale: |
+    Gate is CONCERNS-merge-approved. The single condition standing between this and PASS is the manual end-to-end smoke on the Vercel preview, which I cannot execute (no browser). Founder must:
+    1. Open the preview URL from the Vercel comment in PR #26
+    2. Run the smoke checklist (book → email log path → manage page → cancel + reschedule)
+    3. If clean, signal @devops Gage to squash merge
+    4. If anything breaks (most likely: APPOINTMENT_TOKEN_SECRET not picked up by the existing deploy → may need a redeploy from Vercel dashboard), return to @dev for diagnosis
+    Other LOW observations (CODE-001, OBS-001, PERF-001, ENV-001, TEST-001) are non-blocking and tracked as tech-debt for Phase 2 hardening.
+  follow_up:
+    - 'Mark 2.4-SEC-001 as done in docs/qa/backlog.md (this gate is the verifiable evidence). DONE in this gate.'
+    - '2.4-TEST-001 / 1.5-1.7-TEST-001 should be promoted to P0 with Story 2.7 as the first E2E target — talked about in previous backlogs and reaffirmed here.'
+    - 'Phase 2: harden RPC error envelope (OBS-001), single-RPC cancel (PERF-001), NODE_ENV guard on test exports (CODE-001), strict env enforcement (ENV-001).'

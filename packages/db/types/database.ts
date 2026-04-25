@@ -1156,6 +1156,18 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_public_appointment: {
+        Args: {
+          p_appointment_id: string
+          p_cancel_token: string
+          p_reason?: string
+        }
+        Returns: {
+          appointment_id: string
+          canceled_at: string
+          status: string
+        }[]
+      }
       check_appointment_conflict: {
         Args: {
           p_duration_minutes: number
@@ -1268,6 +1280,28 @@ export type Database = {
         }
       }
       current_user_salon_ids: { Args: never; Returns: string[] }
+      get_public_appointment: {
+        Args: { p_appointment_id: string; p_cancel_token: string }
+        Returns: {
+          appointment_id: string
+          cancel_window_hours: number
+          client_email: string
+          client_name: string
+          duration_minutes: number
+          ends_at: string
+          price_brl: number
+          professional_name: string
+          professional_slug: string
+          salon_city: string
+          salon_name: string
+          salon_slug: string
+          scheduled_at: string
+          service_duration_minutes: number
+          service_id: string
+          service_name: string
+          status: string
+        }[]
+      }
       get_public_booking: {
         Args: { p_appointment_id: string; p_cancel_token: string }
         Returns: {
@@ -1287,6 +1321,25 @@ export type Database = {
       }
       is_salon_owner: { Args: { p_salon_id: string }; Returns: boolean }
       is_superadmin: { Args: never; Returns: boolean }
+      reschedule_public_appointment: {
+        Args: {
+          p_new_scheduled_at: string
+          p_old_appointment_id: string
+          p_old_cancel_token: string
+        }
+        Returns: {
+          appointment_id: string
+          cancel_token: string
+          ends_at: string
+          price_brl: number
+          professional_name: string
+          professional_slug: string
+          salon_name: string
+          salon_slug: string
+          scheduled_at: string
+          service_name: string
+        }[]
+      }
       salon_messaging_cost_month: {
         Args: { p_month?: number; p_salon_id: string; p_year?: number }
         Returns: number

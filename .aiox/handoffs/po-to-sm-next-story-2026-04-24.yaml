@@ -3,7 +3,7 @@ to_agent: sm
 last_command: close-story
 story: "2.4"
 timestamp: "2026-04-24T00:00:00Z"
-consumed: false
+consumed: true
 
 context:
   just_closed: "2.4 Client-Facing Self-Booking (Done via PR #23 / b1d7651)"
