@@ -1,0 +1,53 @@
+from_agent: po
+to_agent: sm
+last_command: close-story
+story: "2.7"
+timestamp: "2026-04-25T00:00:00Z"
+consumed: false
+
+context:
+  just_closed: "2.7 Client Appointment Management (Done via PR #26 / 5d601b4) — cycle limpo (zero hotfix)"
+  epic_progress:
+    epic_id: 2
+    epic_name: "Booking Experience"
+    total: 7
+    done: 6
+    done_list: ["2.1", "2.2", "2.3", "2.4", "2.6", "2.7"]
+    remaining: ["2.5"]
+    percent_complete: 86
+
+recommended_next: "2.5"
+recommendation_rationale: |
+  Story 2.5 (Client History) é a ÚNICA story restante do Epic 2. Fechá-la = Epic 2 100% done (7/7).
+
+  Não destrava nenhum item de backlog (zero dependência inversa) — diferente da 2.7 que fechou
+  2.4-SEC-001. Mas é necessária para completar o ciclo operacional do salão:
+  marcar → atender → registrar histórico → consultar próxima visita.
+
+  Sem 2.5, o staff não consegue ver o histórico do cliente ao recebê-lo, perdendo:
+  - Contexto de visitas anteriores (serviço, profissional, valor, status)
+  - No-show rate por cliente (insight pra confirmação ativa antes do próximo agendamento)
+  - Preferências expressas via notes do agendamento
+
+  Bases técnicas todas prontas: clients table, appointments table, status lifecycle (2.6),
+  RLS para autenticated reads em todas elas. 2.5 é principalmente UI no dashboard interno
+  (`/(dashboard)/clientes/[id]/historico` ou similar — depende do epic shard).
+
+alternative: null
+alternative_rationale: |
+  Não há alternativa razoável neste momento. Todas as outras stories do Epic 2 já estão Done.
+  Founder poderia pular pra Epic 3 (WhatsApp) deixando 2.5 incompleta, mas isso quebra a
+  promessa de "fechar Epic 2 antes de começar Epic 3" da PRD. Não recomendado.
+
+blockers:
+  - none
+
+waivers_to_preserve:
+  - "Epic 2 waivers acumulados (2.1-2.7): toda E2E Playwright deferred (TEST-001 series); polishes documentados em backlog"
+  - "Backlog atual (pós Quinn fechar 2.4-SEC-001): 18 abertos / 1 escalated / 2 done — sólido pra carregar para Epic 3"
+
+suggested_command: "*draft 2.5"
+
+next_actions_after_2_5_close:
+  - "Avaliar promoção de 2.4-TEST-001 (E2E Playwright) de P1 → P0 antes de Epic 3 — pareia com 1.5/1.6/1.7-TEST-001 e cobre as 2 stories críticas de booking público (2.4 + 2.7)"
+  - "Avaliar inicio de Epic 3 (WhatsApp Messaging Automation) ou pause MVP pra design-partner #1 começar"
