@@ -3,7 +3,7 @@ to_agent: data-engineer
 last_command: develop
 story: "2.5"
 timestamp: "2026-04-27T00:00:00Z"
-consumed: false
+consumed: true
 
 context:
   blocker_id: SCHEMA-001
