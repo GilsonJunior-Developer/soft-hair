@@ -1,0 +1,51 @@
+from_agent: sm
+to_agent: dev
+last_command: update-story
+story: "2.5"
+timestamp: "2026-04-27T00:00:00Z"
+consumed: false
+
+context:
+  story_state: "docs/stories/2.5.client-history.md em Status: Ready, version 0.4"
+  validation_score: "8/10 (GO Conditional → Conditions met após SF-001)"
+  ready_for_dev: true
+
+what_changed_in_0_4:
+  - "Task 6 reescrita: removido trabalho duplicado (criação de índices que já existem)"
+  - "Task 6.1 agora valida EXPLAIN ANALYZE bate nos índices reais: idx_clients_salon_name, idx_clients_name_trgm, clients_phone_unique"
+  - "Task 6.2 manteve target < 50ms p95"
+  - "Task 6.3 adicionou escalation path pro Dara se planner não escolher trigram"
+
+scope_unchanged:
+  - "Tasks 1-5 e 7-8: zero mudanças"
+  - "AC: zero mudanças"
+  - "Out of scope: zero mudanças"
+
+dev_recommendations:
+  mode: "interactive (default) — story tem ramificação UI + DB + actions; vale checkpoint"
+  parallel_safe:
+    - "Task 1 (lista) e Task 3 (detail) independentes da Task 4 (notes editor)"
+    - "Task 6 (perf check) é último — só faz sentido após Task 1 estar com query final"
+  reuse_signals:
+    - "Soft delete (Task 5) reusa padrão de apps/web/app/(dashboard)/profissionais/actions.ts:215 (softDeleteProfessional)"
+    - "Pagination + sort: ver apps/web/app/(dashboard)/profissionais/page.tsx para padrão server-component + searchParams"
+    - "Confirm dialog: padrão inline 'Confirmar?' já usado em apps/web/app/(dashboard)/profissionais/[id]/professional-actions.tsx"
+  watch_out:
+    - "Memory: Zod 4 .datetime() rejeita offset por default — se fizer parse de scheduled_at vindo do PostgREST, usar { offset: true }"
+    - "Memory: .data ?? [] mascara erros do Supabase — sempre checar res.error antes do fallback"
+    - "Notes editor: garantir text node (não dangerouslySetInnerHTML) — XSS risk em free text"
+    - "Server actions devem rodar dentro do salon scope via RLS — não bypassar com service role"
+
+epic_context:
+  epic: 2
+  position: "Última story do Epic 2. Fechá-la = Epic 2 100% Done (7/7)"
+  unblocks_downstream: "Nenhum item de backlog. Mas conclui ciclo operacional."
+  next_after_2_5_close:
+    - "Avaliar promoção de 2.4-TEST-001 (E2E Playwright) P1→P0 antes de Epic 3"
+    - "Iniciar Epic 3 (WhatsApp) OU pause MVP pra design-partner #1"
+
+suggested_command: "*develop 2.5"
+
+branch_strategy:
+  recommended: "feature/2.5-client-history (criar local antes de começar)"
+  base: "main"

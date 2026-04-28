@@ -1,0 +1,100 @@
+from_agent: po
+to_agent: sm
+last_command: validate-story-draft
+story: "2.5"
+timestamp: "2026-04-27T00:00:00Z"
+consumed: true
+
+context:
+  re_validation: "Story 2.5 estava em Status: Ready desde 2026-04-21 (validação 0.2 da Pax). Re-validação em 2026-04-27 detectou drift no Task 6 — índices que a story pede para criar JÁ EXISTEM no schema."
+  verdict: "GO Conditional (8/10) — fix em Task 6 antes de soltar pra @dev"
+  score_breakdown:
+    title_clear: PASS
+    description_complete: PASS
+    ac_testable: PASS (6 ACs, todos verificáveis e mapeados a tasks)
+    scope_in_out: PASS (Out of scope explícito em Dev Notes)
+    dependencies_mapped: PASS (Epic 1 + 2.2)
+    complexity_estimate: PASS (Low-Medium, alinhado com escopo)
+    business_value: PASS (personalizar atendimento)
+    risks_documented: WEAK (cross-cut soft delete em 2.1 mencionado, mas sem seção dedicada de riscos)
+    done_criteria: PASS (AC ↔ Task mapping limpo)
+    prd_alignment: PASS (ACs match Epic 2 PRD com pequenas precisões — placeholder R$ 0,00, página `/clientes/[id]`)
+    code_intelligence: PASS (Task 5.4 reutiliza padrão soft-delete da Story 1.5 — verificado em `apps/web/app/(dashboard)/profissionais/actions.ts:215`)
+
+issues:
+  should_fix:
+    - id: SF-001
+      severity: should-fix
+      task_ref: "Task 6 (Index validation)"
+      finding: |
+        Task 6.1 e 6.2 estão obsoletas. O schema atual já tem:
+          - `idx_clients_salon_name` ON (salon_id, name) WHERE deleted_at IS NULL
+            (em supabase/migrations/20260420000001_indexes.sql:74-76)
+          - `idx_clients_name_trgm` USING gin (name extensions.gin_trgm_ops) WHERE deleted_at IS NULL
+            (em supabase/migrations/20260420000001_indexes.sql:80-82)
+          - `clients_phone_unique` UNIQUE (salon_id, phone_e164) — auto-cria índice
+            (em supabase/migrations/20260420000000_initial_schema.sql:261)
+
+        Task 6.1 referencia nome de índice inexistente: `clients_salon_id_phone_e164_idx`.
+        Task 6.2 propõe trabalho já feito (gin_trgm_ops já está in place — decisão tomada
+        pelo Dara desde Epic 1).
+      recommended_fix: |
+        Reescrever Task 6 como:
+          - [ ] **Task 6: Index validation (AC: 6 perf)**
+            - [ ] 6.1 Confirm existing indexes hit expected paths:
+                  `idx_clients_salon_name` (sort + filter)
+                  `idx_clients_name_trgm` (search ILIKE/trigram)
+                  `clients_phone_unique` (phone exact match)
+            - [ ] 6.2 EXPLAIN ANALYZE search com 1000+ seeded rows → < 50ms p95
+            - [ ] 6.3 Se EXPLAIN não usa idx_clients_name_trgm: pingar @data-engineer
+                  pra avaliar threshold ILIKE → trigram (pg_trgm tem custo em writes)
+      blocking: false
+
+  nice_to_have:
+    - id: NH-001
+      task_ref: "Task 7 (Unit tests)"
+      finding: |
+        Apenas 1 unit test (`search-normalization.test.ts`). Para cobertura de
+        server actions críticas (softDeleteClient, updateAppointmentNotes),
+        falta teste de validation/RLS scope.
+      recommended_addition: |
+        - [ ] 7.2 `actions.test.ts` — softDeleteClient rejeita salon_id de outro tenant
+        - [ ] 7.3 `actions.test.ts` — updateAppointmentNotes valida ownership via RLS
+
+    - id: NH-002
+      task_ref: "AC 4 (Editable notes)"
+      finding: "Sem menção a sanitização de XSS em notes free-text. React escapa por default mas vale 1 linha em Dev Notes confirmando que renderização usa text node, nunca dangerouslySetInnerHTML."
+
+anti_hallucination_check:
+  verified:
+    - "clients table existe (initial_schema:240+)"
+    - "appointments table com client_id, status, scheduled_at, notes existe"
+    - "Status COMPLETED/PENDING_CONFIRMATION/CONFIRMED estão corretos (Story 2.6 implementada)"
+    - "Padrão soft-delete da Story 1.5 (profissionais) verificado e reutilizável"
+    - "ComingSoon real em apps/web/app/(dashboard)/clientes/page.tsx (Task 1 vai substituir)"
+    - "extensions.gin_trgm_ops convention já é usada (consistente com memory `feedback_supabase_pgcrypto_schema.md`)"
+  flagged:
+    - "Nome de índice `clients_salon_id_phone_e164_idx` em Task 6.1 não existe (ver SF-001)"
+
+next_actions:
+  primary:
+    agent: "@sm"
+    command: "*update-story 2.5"
+    reason: "Reescrever Task 6 conforme SF-001. Trabalho de ~5 min. Tarefas estão em editors=[scrum-master, dev-agent], Pax não edita diretamente."
+  alternative:
+    agent: "@dev"
+    command: "*develop 2.5"
+    reason: "Aceitável se @dev for instruído a tratar Task 6 como verificação dos índices existentes (não criação). Pax NÃO recomenda — vai gerar fricção mid-flight."
+  parallel_unblock:
+    - "Task 6 não é blocker para Tasks 1-5 — Dev pode começar Task 1 (lista) sem aguardar correção. Task 6 é validação de perf, pode ser último item."
+
+confidence_level: high
+implementation_readiness_score: 8
+
+waivers_applied:
+  - "Task 8 E2E permanece DEFERRED (alinhado com waivers acumulados Epic 2 — TEST-001 series)"
+
+epic_context:
+  epic: 2
+  position: "Última story do Epic 2 (7/7). Fechamento da 2.5 = Epic 2 100% Done."
+  unblocks: "Nenhum item de backlog. Mas conclui ciclo operacional do salão (marcar → atender → registrar → consultar)."
