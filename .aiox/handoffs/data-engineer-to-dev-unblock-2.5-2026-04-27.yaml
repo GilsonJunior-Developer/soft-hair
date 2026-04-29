@@ -3,7 +3,7 @@ to_agent: dev
 last_command: apply-migration
 story: "2.5"
 timestamp: "2026-04-27T00:00:00Z"
-consumed: false
+consumed: true
 
 context:
   blocker_resolved: SCHEMA-001
