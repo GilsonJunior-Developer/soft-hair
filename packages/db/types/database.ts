@@ -87,6 +87,7 @@ export type Database = {
           ends_at: string
           id: string
           idempotency_key: string | null
+          notes: string | null
           price_brl_discount: number
           price_brl_final: number
           price_brl_original: number
@@ -109,6 +110,7 @@ export type Database = {
           ends_at: string
           id?: string
           idempotency_key?: string | null
+          notes?: string | null
           price_brl_discount?: number
           price_brl_final: number
           price_brl_original: number
@@ -131,6 +133,7 @@ export type Database = {
           ends_at?: string
           id?: string
           idempotency_key?: string | null
+          notes?: string | null
           price_brl_discount?: number
           price_brl_final?: number
           price_brl_original?: number

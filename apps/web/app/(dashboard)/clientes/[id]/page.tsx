@@ -8,6 +8,7 @@ import { formatPhoneBR } from '@/lib/phone';
 import { StatusBadge } from '@/components/agenda/status-badge';
 import type { AppointmentStatus } from '@/lib/appointment-state';
 import { ClientActions } from './client-actions';
+import { NotesEditor } from './notes-editor';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ type ApptRow = {
   scheduled_at: string;
   status: AppointmentStatus;
   price_brl_final: number;
+  notes: string | null;
   services: { name: string } | null;
   professionals: { name: string } | null;
 };
@@ -67,7 +69,7 @@ export default async function ClientDetailPage({
   const nowIso = new Date().toISOString();
 
   const apptSelect =
-    'id, scheduled_at, status, price_brl_final, services(name), professionals(name)';
+    'id, scheduled_at, status, price_brl_final, notes, services(name), professionals(name)';
 
   const [pastRes, upcomingRes] = await Promise.all([
     supabase
@@ -167,12 +169,16 @@ export default async function ClientDetailPage({
         title="Próximos agendamentos"
         empty="Nenhum agendamento futuro."
         items={upcoming}
+        clientId={client.id}
+        editableNotes={false}
       />
 
       <Section
         title={`Histórico (últimos ${PAST_LIMIT})`}
         empty="Nenhum atendimento registrado ainda."
         items={past}
+        clientId={client.id}
+        editableNotes
       />
     </section>
   );
@@ -226,10 +232,14 @@ function Section({
   title,
   items,
   empty,
+  clientId,
+  editableNotes,
 }: {
   title: string;
   items: ApptRow[];
   empty: string;
+  clientId: string;
+  editableNotes: boolean;
 }) {
   return (
     <section className="flex flex-col gap-3">
@@ -243,34 +253,48 @@ function Section({
           {items.map((a) => (
             <li
               key={a.id}
-              className="flex flex-col gap-2 rounded-[var(--radius-lg)] border p-4 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-[var(--radius-lg)] border p-4"
               style={{
                 borderColor: 'var(--color-border)',
                 backgroundColor: 'var(--color-surface)',
               }}
             >
-              <div className="flex flex-col gap-1">
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-medium [color:var(--color-text-strong)]">
-                    {a.services?.name ?? 'Serviço removido'}
-                  </span>
-                  <span className="text-xs [color:var(--color-text-muted)]">
-                    com {a.professionals?.name ?? 'profissional removido'}
-                  </span>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-medium [color:var(--color-text-strong)]">
+                      {a.services?.name ?? 'Serviço removido'}
+                    </span>
+                    <span className="text-xs [color:var(--color-text-muted)]">
+                      com {a.professionals?.name ?? 'profissional removido'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs [color:var(--color-text-muted)]">
+                    <span>
+                      {formatInTimeZone(
+                        a.scheduled_at,
+                        BR_TIMEZONE,
+                        "dd 'de' MMM yyyy 'às' HH:mm",
+                        { locale: ptBR },
+                      )}
+                    </span>
+                    <span>{BRL.format(Number(a.price_brl_final))}</span>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs [color:var(--color-text-muted)]">
-                  <span>
-                    {formatInTimeZone(
-                      a.scheduled_at,
-                      BR_TIMEZONE,
-                      "dd 'de' MMM yyyy 'às' HH:mm",
-                      { locale: ptBR },
-                    )}
-                  </span>
-                  <span>{BRL.format(Number(a.price_brl_final))}</span>
-                </div>
+                <StatusBadge status={a.status} />
               </div>
-              <StatusBadge status={a.status} />
+
+              {a.notes && !editableNotes && (
+                <p className="text-sm [color:var(--color-text-base)]">{a.notes}</p>
+              )}
+
+              {editableNotes && (
+                <NotesEditor
+                  appointmentId={a.id}
+                  clientId={clientId}
+                  initial={a.notes}
+                />
+              )}
             </li>
           ))}
         </ul>
