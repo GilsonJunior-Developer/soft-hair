@@ -1,0 +1,117 @@
+from_agent: qa
+to_agent: devops
+last_command: qa-gate
+story: "2.5"
+timestamp: "2026-04-28T00:00:00Z"
+consumed: false
+
+context:
+  gate_verdict: "CONCERNS (PASS-with-conditions)"
+  gate_file: "docs/qa/gates/2.5-client-history.yml"
+  story_state: "Ready for Review with QA Results appended"
+  branch: feature/2.5-client-history
+  commits_ahead: 7
+  epic_close: "Last story of Epic 2 — approval + deploy fecha Epic 2 = 100% (7/7)"
+
+deploy_sequence:
+  critical_warning: |
+    Migration `20260427000000_story_2_5_appointments_notes` is APPLIED to
+    softhair-dev but NOT to softhair-prod. App code branch reads
+    `appointments.notes` column. If app deploys before migration applies,
+    detail page will fail with PostgREST schema error.
+
+  required_order:
+    - step: 1
+      action: "Apply migration to softhair-prod"
+      how: |
+        Option A — via Supabase MCP (recommended, audit trail):
+          mcp__supabase__apply_migration(
+            project_id='zqubqygagvtmvvljbstc',
+            name='story_2_5_appointments_notes',
+            query=<contents of supabase/migrations/20260427000000_story_2_5_appointments_notes.sql>
+          )
+
+        Option B — via Supabase dashboard SQL editor:
+          Copy/paste full migration file content, execute as one transaction
+
+    - step: 2
+      action: "Audit prod state matches dev"
+      sql: |
+        SELECT
+          EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema='public' AND table_name='appointments'
+                    AND column_name='notes' AND data_type='text') AS notes_ok,
+          NOT EXISTS (SELECT 1 FROM information_schema.routine_privileges
+                      WHERE routine_schema='public' AND routine_name='create_appointment_atomic'
+                        AND grantee='anon') AS anon_revoked_ok,
+          EXISTS (SELECT 1 FROM information_schema.routine_privileges
+                  WHERE routine_schema='public' AND routine_name='create_appointment_atomic'
+                    AND grantee='authenticated') AS auth_granted_ok;
+      expected: "{ notes_ok: true, anon_revoked_ok: true, auth_granted_ok: true }"
+
+    - step: 3
+      action: "Merge PR to main"
+      command: "*push (creates PR if not exists, then *merge after CI green)"
+
+    - step: 4
+      action: "Wait for Vercel deploy"
+      note: "PostgREST will refresh schema cache automatically (~30s after migration)"
+
+    - step: 5
+      action: "Smoke test prod URL"
+      checks:
+        - "GET /clientes — list renders without errors"
+        - "GET /clientes/[id] — detail page renders, notes column reads OK"
+        - "POST updateAppointmentNotes (via UI: edit notes, save, verify Salvo ✓)"
+        - "POST softDeleteClient (via UI: remove a test client, verify redirect)"
+
+  why_safe_to_apply_migration_first: |
+    1. ALTER TABLE ADD COLUMN nullable, no default — does not lock the table for
+       reads, no rewrite needed (Postgres uses metadata-only fast path)
+    2. RPC change (CREATE OR REPLACE) is backward-compatible — old callers that
+       didn't pass p_notes still work (DEFAULT NULL, NULL gets stored)
+    3. New `notes` column is read-only by old app code (returns undefined since
+       not in select string) — no runtime breakage
+    4. REVOKE FROM PUBLIC + REVOKE FROM anon does not break old app — all
+       legitimate callers go through `authenticated` role
+    5. RLS unchanged — row-level policies cover the new column automatically
+
+  rollback_plan:
+    if_app_deploy_fails: |
+      App rollback is enough — migration is forward-compatible.
+      Old app version doesn't read appointments.notes, so it works fine
+      against the new schema.
+    if_migration_breaks_anything: |
+      Unlikely (smoke test in dev passed), but:
+        BEGIN;
+        ALTER TABLE public.appointments DROP COLUMN IF EXISTS notes;
+        -- Restore RPC v2 (without notes in INSERT)
+        -- via re-running migration 20260422000005_fix_create_appointment_atomic_rpc.sql
+        COMMIT;
+      Cost: zero data loss (notes was empty in all rows immediately
+      after apply since this is first deploy of the column).
+
+post_deploy_handoff:
+  to_agent: po
+  command: "*close-story 2.5"
+  conditions:
+    - "Migration applied to prod"
+    - "PR merged"
+    - "Smoke test passed"
+    - "Status story → Done"
+
+epic_2_celebration:
+  status: "Após este deploy, Epic 2 = 100% (7/7)"
+  done_list: ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7"]
+  next_decision: |
+    PO + Founder devem decidir antes de iniciar Epic 3 (WhatsApp):
+    1. Promover Epic 2 E2E TEST-001 series (P1→P0) — pareia 1.5/1.6/1.7-TEST-001
+       e cobre as 3 stories críticas de booking público (2.4 + 2.7 + 2.5)
+    2. Pause MVP pra design-partner #1 começar (validação de mercado)
+    3. Iniciar Epic 3 direto
+
+waivers_to_carry:
+  - "WAIVER-E2E-2.5: Task 8 Playwright deferred — pode ser promovido pré-Epic 3"
+  - "WAIVER-CODERABBIT-*: WSL infra issue neste session; restaurar antes da próxima review/dev"
+
+suggested_command: "@devops *push (after applying migration to softhair-prod first)"

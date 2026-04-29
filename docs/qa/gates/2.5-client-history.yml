@@ -1,0 +1,179 @@
+storyId: "2.5"
+storyTitle: "Client History & Profile"
+verdict: CONCERNS
+verdictRationale: |
+  All 6 ACs implemented and verified. Code quality is high — defense-in-depth
+  RLS pattern, ARIA on the editor, text-node rendering (XSS-safe), Promise.all
+  parallel fetches, idempotent migration with REVOKE PUBLIC + REVOKE anon
+  (gotcha-aware). Test coverage solid for the unit-test layer. Live schema
+  state in softhair-dev confirms migration intent. Performance budget atendido
+  with 800x/30x/130x headroom over the 50ms target.
+
+  Verdict is CONCERNS (not PASS) for ONE deployment-timing concern:
+  softhair-prod migration is NOT applied yet, and the app code (release
+  branch) depends on `appointments.notes` column. If @devops merges and
+  deploys the app before applying the migration to prod, the detail page
+  query `select notes` will fail until PostgREST refreshes its schema cache.
+
+  This is operational, not a code defect — the migration file is in the repo,
+  ready for @devops. Documenting as HIGH-severity operational concern with
+  explicit sequencing requirement in the gate notes.
+
+  Other items (in-memory aggregation boundary, manual types patch, minor UX
+  details) are documented tech debt with clear thresholds — none warrant
+  blocking the story.
+
+reviewer: Quinn (Guardian)
+reviewedAt: "2026-04-28T00:00:00Z"
+branch: feature/2.5-client-history
+commitsAhead: 7
+
+acceptanceCriteriaCoverage:
+  AC1_list_sortable:
+    status: PASS
+    evidence: "apps/web/app/(dashboard)/clientes/page.tsx + clients-sort-select.tsx; 4 sort modes (last_visit default, name, visits, recent); page-size 25"
+  AC2_search_name_phone:
+    status: PASS
+    evidence: "buildClientsSearchFilter with 4-digit threshold for phone leg; debounced 300ms in clients-search.tsx; 8 unit tests cover sanitization + boundaries"
+  AC3_detail_page:
+    status: PASS
+    evidence: "clientes/[id]/page.tsx — Promise.all past 10 + upcoming (PENDING/CONFIRMED) + 3 stat cards + R$ 0,00 placeholder with Epic 5 hint"
+  AC4_editable_notes:
+    status: PASS
+    evidence: "NotesEditor inline expand, dirty/saved state, ARIA labels; updateAppointmentNotes server action with Zod max 2000 + salon scope guard + trim→null"
+  AC5_soft_delete:
+    status: PASS
+    evidence: "softDeleteClient sets deleted_at + .eq('salon_id') guard; ClientActions inline confirm pattern (5s timeout) consistent with Story 1.5 professionals"
+  AC6_perf_1000_under_1s:
+    status: PASS
+    evidence: "EXPLAIN ANALYZE in softhair-dev with 1000 clients + 5000 appts: list-by-name 0.060ms (idx_clients_salon_name), search ILIKE 1.567ms (clients_phone_unique), stats agg 0.382ms (idx_appointments_client). All << 50ms target."
+
+sevenChecksFromStoryLifecycle:
+  code_review:
+    status: PASS
+    notes: |
+      Defense-in-depth RLS pattern verified in softDeleteClient and
+      updateAppointmentNotes. Reuses Story 1.5 inline-confirm UX pattern.
+      In-memory aggregation correctly handles edge cases (empty stats →
+      0 visits, null last_appointment_at). Promise.all on detail page for
+      parallel queries. Static identifier for textarea's aria-describedby.
+  unit_tests:
+    status: PASS
+    notes: "37/37 passing across 6 test files. New: 8 in search-query.test.ts (PostgREST OR sanitization, 4-digit phone threshold) + 8 in actions.test.ts (Zod boundary 2000, whitespace→null, RLS scope guard, supabase error path)."
+  acceptance_criteria:
+    status: PASS
+    notes: "All 6 ACs implemented and validated above."
+  no_regressions:
+    status: PASS
+    notes: "Existing tests (login, healthz, appointment-token, cancel-window) all green. Detail page reuses StatusBadge from agenda module without modification."
+  performance:
+    status: PASS
+    notes: "EXPLAIN ANALYZE evidence: all 3 critical paths < 2ms with 1000 clients + 5000 appts (target was < 50ms). Index choice validated."
+  security:
+    status: PASS_WITH_NOTE
+    notes: |
+      Strengths:
+      - RLS row-level guard + explicit .eq('salon_id') defense-in-depth in actions
+      - Zod input validation on free-text notes (max 2000 chars)
+      - Trim + null normalization (no whitespace-bypass storage)
+      - REVOKE EXECUTE FROM PUBLIC + REVOKE FROM anon on RPC (Supabase default-ACL gotcha caught and documented)
+      - XSS-safe rendering via React text nodes (verified: no dangerouslySetInnerHTML)
+      - notFound() on missing user/salon/client (no info disclosure on 404)
+
+      Note: Server actions don't validate UUID format on input ids before
+      hitting DB. PostgreSQL rejects with type error (caught by .error
+      handler) — functionally safe, but Zod-validating UUID at the action
+      boundary would give cleaner error messages. LOW severity, optional.
+  documentation:
+    status: PASS
+    notes: "Story has rich Dev Agent Record, full Change Log (v0.1 → v0.7), File List with Created/Modified split. Migration has inline rollback notes."
+
+issues:
+  - id: DEPLOY-001
+    severity: high
+    category: deployment
+    description: "softhair-prod migration `20260427000000_story_2_5_appointments_notes` is NOT applied yet. The app code branch depends on `appointments.notes` column. If @devops merges + deploys app before applying migration to prod, the detail page query `select notes` will fail."
+    recommendation: "@devops MUST apply migration to softhair-prod BEFORE deploying the app. Sequence: (1) merge PR, (2) apply migration to softhair-prod (via Supabase MCP or dashboard SQL editor), (3) deploy Vercel app. PostgREST will need to refresh its schema cache (automatic but may have ~30s delay). Consider applying the migration FIRST (schema-additive ALTER ADD COLUMN is safe to deploy ahead — RPC sync change is also safe because old RPC already accepted p_notes silently)."
+    blockingMerge: false
+    blockingDeploy: true
+
+  - id: PERF-002
+    severity: medium
+    category: performance
+    description: "In-memory aggregation in clients/page.tsx fetches ALL non-deleted clients of the salon before paginating. Bounded by 'few thousand clients' per Dev Notes. For salons reaching 5000+ clients (or empty search returning all), memory + sort cost grows O(n)."
+    recommendation: "Document threshold (e.g., 5000 clients per salon) and add lightweight observability (log salon_id + client count when > 2000). When threshold hit, materialize clients_with_stats view (security_invoker = true, same pattern as 20260423000001_public_views_invoker_mode.sql). Not blocking MVP — design-partner scope is 2-10 pros = expected ~500-1500 clients."
+    blockingMerge: false
+
+  - id: TYPES-003
+    severity: low
+    category: tech-debt
+    description: "packages/db/types/database.ts manually patched to add `notes` to appointments Row/Insert/Update. Full types regen via Supabase CLI deferred."
+    recommendation: "Schedule full types regen at start of Epic 3 (WhatsApp tables will need it anyway). Keep manual patch documented in story Change Log (v0.7) for traceability."
+    blockingMerge: false
+
+  - id: UX-004
+    severity: low
+    category: accessibility
+    description: "NotesEditor toggle button hardcodes aria-expanded='false' (line 59). When editor is OPEN, the button is unmounted, so aria-expanded never reflects 'true'. Strictly speaking, aria-expanded is meant for elements that toggle other content while remaining mounted."
+    recommendation: "Optional: refactor to always render the toggle button and conditionally render the textarea, with aria-expanded toggling. Current behavior is functional and screen-reader users get the label change ('Editar' vs '+ Adicionar') as feedback. Not blocking."
+    blockingMerge: false
+
+  - id: TEST-005
+    severity: low
+    category: tests
+    description: "setTimeout in NotesEditor (line 40) clearing 'Salvo ✓' indicator is not cleared on unmount. Theoretical memory leak in rapid mount/unmount cycles."
+    recommendation: "Optional: wrap in useEffect with cleanup, or use a ref-tracked timer id. Current behavior negligible in practice (component is short-lived, callback is cheap)."
+    blockingMerge: false
+
+  - id: VALIDATION-006
+    severity: low
+    category: input-validation
+    description: "Server actions (softDeleteClient, updateAppointmentNotes) don't pre-validate UUID format on input ids. PostgreSQL rejects with type error caught by error handler — functionally safe but error message is generic."
+    recommendation: "Optional: add z.string().uuid() to action signatures for cleaner error messages. Not blocking — current behavior is secure, just less debuggable."
+    blockingMerge: false
+
+waiversAccepted:
+  - id: WAIVER-E2E-2.5
+    description: "Task 8 E2E (Playwright) deferred per Epic 2 TEST-001 series waiver"
+    rationale: "Backlog can promote P1→P0 before Epic 3 starts. Manual happy-path testing acceptable for design-partner velocity."
+    expiresAt: "Epic 3 kickoff"
+  - id: WAIVER-CODERABBIT-DEV
+    description: "CodeRabbit pre-commit (dev workflow) not run — WSL infrastructure not available in this session"
+    rationale: "QA review used manual thorough analysis instead. Future sessions should restore WSL/CodeRabbit pipe."
+    expiresAt: "Next dev session"
+  - id: WAIVER-CODERABBIT-QA
+    description: "CodeRabbit qa-review (committed mode) not run — same WSL infra issue"
+    rationale: "Manual review covered the equivalent depth (security, RLS, XSS, performance, defense-in-depth). Document in QA Results."
+    expiresAt: "Next QA session"
+
+testCoverageSummary:
+  unit_tests:
+    total: 37
+    passing: 37
+    new_in_2_5:
+      - "search-query.test.ts: 8 cases (empty, threshold, sanitization, normalization)"
+      - "actions.test.ts: 8 cases (RLS scope, Zod boundary 2000, whitespace→null, error path)"
+  integration_tests: "covered by SQL smoke test in migration apply (DO block UPDATE/SELECT/REVERT)"
+  e2e_tests: "deferred per WAIVER-E2E-2.5"
+  perf_tests: "EXPLAIN ANALYZE evidence in softhair-dev (Task 6 — 3 query paths)"
+
+epicContext:
+  epic: 2
+  closure: "Story 2.5 = última do Epic 2. Aprovação fecha Epic 2 = 100% (7/7)."
+  next_decision: "Avaliar promoção de Epic 2 E2E TEST-001 series (P1→P0) ANTES de iniciar Epic 3, conforme handoff anterior da Pax."
+  prod_deploy_sequence: |
+    1. @devops apply migration 20260427000000 to softhair-prod
+    2. Verify column exists + privileges (anon REVOKED, authenticated GRANTED)
+    3. Merge PR to main
+    4. Vercel deploys app
+    5. Smoke test /clientes + /clientes/[id] + notes editor on prod URL
+
+handoff:
+  next_agent: "@devops"
+  next_command: "*push (after PO close-story)"
+  conditions:
+    - "Apply migration to softhair-prod BEFORE app deploy"
+    - "Verify RPC privileges post-apply (audit query in handoff)"
+  mandatory_audits:
+    - "anon NOT in routine_privileges for create_appointment_atomic"
+    - "appointments.notes column exists with TEXT type"
