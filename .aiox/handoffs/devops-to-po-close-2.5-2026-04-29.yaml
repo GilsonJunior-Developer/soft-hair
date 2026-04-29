@@ -1,0 +1,93 @@
+from_agent: devops
+to_agent: po
+last_command: push
+story: "2.5"
+timestamp: "2026-04-29T00:00:00Z"
+consumed: true
+
+context:
+  pr: "#28 (squash-merged at 2026-04-29T03:03:09Z, commit cb76a59)"
+  pr_url: "https://github.com/GilsonJunior-Developer/soft-hair/pull/28"
+  branch: "feature/2.5-client-history (deleted from remote, pruned locally)"
+  main_state: "8 commits squash-merged → 1 commit on main (cb76a59)"
+
+deploy_sequence_executed:
+  step_1_prod_migration:
+    status: COMPLETE
+    timestamp: "2026-04-29T02:51Z (approx)"
+    project: "softhair-prod (zqubqygagvtmvvljbstc)"
+    method: "Supabase MCP apply_migration"
+    audit_4_of_4_pass:
+      notes_column_ok: true
+      anon_revoked_ok: true
+      authenticated_granted_ok: true
+      rpc_writes_notes_ok: true
+    pre_state: "8 appointments + 7 active clients (zero data affected by ALTER ADD COLUMN nullable)"
+
+  step_2_pr_created:
+    status: COMPLETE
+    pr_number: 28
+    title: "feat(public): Story 2.5 client history & profile + appointments.notes"
+    ci_results_at_merge:
+      detect_runtime_stack: pass (5s)
+      lint_typecheck_test_build: pass (1m28s)
+      vercel_preview: pass
+      vercel_preview_comments: pass
+      lighthouse_ci: pass (4m8s)
+      e2e_playwright: skip (per Epic 2 TEST-001 waiver)
+    mergeable: true
+
+  step_3_squash_merge:
+    status: COMPLETE
+    merge_commit: cb76a59
+    strategy: "--squash --delete-branch"
+    note: "Branch feature/2.5-client-history deletada do remote no merge"
+
+  step_4_main_ci:
+    status: COMPLETE
+    run_id: 25088786997
+    duration: ~5 min
+    conclusion: success
+    jobs_pass:
+      - "Detect runtime stack (success)"
+      - "Lint + Typecheck + Test + Build (success, 1m23s)"
+      - "Lighthouse CI (success, 4m7s)"
+      - "E2E (Playwright) (skipped per waiver)"
+
+  step_5_vercel_prod_deploy:
+    status: COMPLETE (auto-deploy from main push)
+    smoke_probe:
+      root_https: "200 OK"
+      api_healthz: "{ status: ok, version: 0.1.0, timestamp: 2026-04-29T03:09:39.723Z }"
+      clientes_route: "307 redirect (sem auth — comportamento esperado, route exige auth)"
+
+remaining_smoke_test_for_founder:
+  description: "Smoke test funcional precisa de sessão autenticada — Founder ou design-partner faz no browser. Não bloqueia close-story (CI + Lighthouse + advisor já cobrem o automatizável)."
+  steps_to_validate:
+    - "Login no dashboard"
+    - "GET /clientes — lista renderiza com clients reais (7 active em prod)"
+    - "Search por nome/telefone — debounced funciona"
+    - "GET /clientes/{id} — detail page com Histórico + Próximos"
+    - "NotesEditor: editar uma observação em past appointment, salvar, ver Salvo ✓, reload preserva"
+    - "Soft delete: criar cliente teste, removê-lo, verificar redirect + sumir da lista"
+
+tech_debt_carried_forward:
+  - id: BRANCH-CLEANUP-001
+    description: "2 branches locais antigas sobraram após operações pré-Story 2.5: chore/story-2.5-refresh, chore/story-2.7-refresh. Fica para cleanup futuro (gage *cleanup pode varrer)."
+    blocking: false
+  - id: NODE20-DEPRECATION-001
+    description: "GitHub Actions warns que actions/checkout@v4, actions/setup-node@v4, pnpm/action-setup@v4 usam Node.js 20 deprecated (will be forced to Node 24 starting June 2nd 2026). Ainda funcional, mas deve atualizar workflows pre-junho."
+    blocking: false
+    deadline: "2026-06-02"
+
+epic_2_status:
+  done_list: ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7"]
+  remaining: []
+  percent_complete: 100
+  closure_pending_action: "@po *close-story 2.5 → marca Status Done → Epic 2 oficial 7/7"
+
+next_decisions_for_founder:
+  - "Após @po *close-story 2.5, decidir entre: (a) promover Epic 2 E2E TEST-001 series P1→P0 antes de Epic 3, (b) iniciar Epic 3 (WhatsApp) direto, (c) pause MVP para validação com design-partner #1"
+  - "Promoção E2E pareia 1.5/1.6/1.7-TEST-001 + cobre 3 stories críticas booking público (2.4 + 2.5 + 2.7)"
+
+suggested_command: "@po *close-story 2.5"

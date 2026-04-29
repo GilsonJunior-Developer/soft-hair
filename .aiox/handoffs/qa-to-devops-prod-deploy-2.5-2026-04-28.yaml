@@ -3,7 +3,7 @@ to_agent: devops
 last_command: qa-gate
 story: "2.5"
 timestamp: "2026-04-28T00:00:00Z"
-consumed: false
+consumed: true
 
 context:
   gate_verdict: "CONCERNS (PASS-with-conditions)"
