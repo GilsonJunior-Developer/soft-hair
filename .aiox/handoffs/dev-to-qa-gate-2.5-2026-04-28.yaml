@@ -1,0 +1,75 @@
+from_agent: dev
+to_agent: qa
+last_command: develop
+story: "2.5"
+timestamp: "2026-04-28T00:00:00Z"
+consumed: true
+
+context:
+  story_state: "Story 2.5 Ready for Review. Branch feature/2.5-client-history, 6 commits ahead de main."
+  epic_close: "Esta é a ÚLTIMA story do Epic 2. Aprovação fecha Epic 2 100% (7/7)."
+
+scope_summary:
+  acs_implemented:
+    - "AC1: lista /clientes com sort (Última visita default, Nome, Total visitas, Cadastro recente)"
+    - "AC2: search por nome OU telefone (debounced 300ms, threshold 4 dígitos pra ativar phone leg)"
+    - "AC3: detail page /clientes/[id] com header + 3 stat cards + Próximos + Histórico"
+    - "AC4: notes editáveis per-appointment via NotesEditor (textarea, max 2000, dirty/saved state, ARIA)"
+    - "AC5: soft delete cliente com inline confirm (5s timeout) + redirect"
+    - "AC6: perf < 50ms validado via EXPLAIN ANALYZE em 1000 clients + 5000 appointments"
+
+quality_signals:
+  lint: "✔ No ESLint warnings or errors"
+  typecheck: "✔ tsc --noEmit clean"
+  unit_tests: "37/37 passing (8 search-query + 8 actions + 21 regression Epic 1+2)"
+  e2e_tests: "deferred (Task 8 — waiver Epic 2 TEST-001 series)"
+  coderabbit_dev_phase: "atempt failed (WSL not available in dev session); QA full-mode é primary coverage"
+
+migrations_applied:
+  - file: "supabase/migrations/20260427000000_story_2_5_appointments_notes.sql"
+    project: softhair-dev (oywizkjldmxhatvftmho)
+    applied_by: "@data-engineer (Dara) via Supabase MCP em 2026-04-27"
+    pending_environments: ["softhair-prod"]
+    deployment_note: "Aplicar em prod via release flow padrão antes do PR merge to main"
+
+key_files_to_review:
+  highest_value:
+    - path: "apps/web/app/(dashboard)/clientes/actions.ts"
+      focus: "RLS scope (defesa em profundidade), Zod boundaries, trim+null pattern"
+    - path: "apps/web/app/(dashboard)/clientes/page.tsx"
+      focus: "In-memory aggregation correctness, sort comparator stability, search filter sanitization"
+    - path: "apps/web/app/(dashboard)/clientes/[id]/page.tsx"
+      focus: "Promise.all queries, status filter na seção Próximos, render condicional de notes"
+    - path: "apps/web/app/(dashboard)/clientes/[id]/notes-editor.tsx"
+      focus: "Cancel restaura savedValue, dirty detection, ARIA labels, useTransition pending state"
+    - path: "supabase/migrations/20260427000000_story_2_5_appointments_notes.sql"
+      focus: "REVOKE FROM PUBLIC + REVOKE FROM anon (gotcha capturado), RPC INSERT correctness"
+  lower_value:
+    - "apps/web/app/(dashboard)/clientes/clients-search.tsx (debounce, URLSearchParams)"
+    - "apps/web/app/(dashboard)/clientes/clients-pagination.tsx (Link-based, prefetch=false)"
+    - "apps/web/app/(dashboard)/clientes/clients-sort-select.tsx"
+    - "apps/web/app/(dashboard)/clientes/loading.tsx (skeleton)"
+
+areas_of_special_attention:
+  - id: "RLS-1"
+    finding: "softDeleteClient e updateAppointmentNotes têm `.eq('salon_id', salonId)` explícito além de RLS. Pode parecer redundante mas é defesa em profundidade — RLS depende do user JWT, esses guards funcionam mesmo se RLS for bypassada por bug futuro. Pattern já usado em outras actions do projeto."
+  - id: "PERF-1"
+    finding: "Aggregation in-memory para stats (visit_count, last_appointment_at). Dev Notes da story sanciona até 'few thousand clients'. Verificado em softhair-dev: 1000 clients × 5 appts = 0.382ms. Para n > 5000 considerar view server-side `clients_with_stats` (já desenhada conceitually em handoff)."
+  - id: "TYPES-1"
+    finding: "packages/db/types/database.ts foi patcheado MANUALMENTE pra incluir `notes` em appointments. Tech debt: regen completa via Supabase CLI quando Epic 3 começar (provavelmente vai adicionar tabelas WhatsApp). NÃO bloqueia 2.5."
+  - id: "XSS-1"
+    finding: "appointments.notes é free text rendered via {a.notes} (text node, não dangerouslySetInnerHTML). React escapa por default — XSS-safe. Memory `feedback_supabase_data_null_mask.md` atendida (todos os fetches checam .error antes de fallback)."
+
+waivers_carried_forward:
+  - "Task 8 E2E (Playwright) deferred — Epic 2 TEST-001 series; backlog pode promover P1→P0 antes de Epic 3"
+  - "CodeRabbit dev pre-commit deferred to QA gate (WSL infra)"
+
+prod_deployment_blocker:
+  - "softhair-prod migration `20260427000000_story_2_5_appointments_notes` ainda NÃO aplicada"
+  - "@devops deve aplicar antes do app deploy (sequência crítica: migration → ci → app deploy) pra evitar runtime error em PostgREST cache invalidation"
+
+epic_2_close_celebration:
+  status: "Após esta gate aprovar, Epic 2 fecha 7/7"
+  next_decision: "Avaliar promoção de E2E TEST-001 series (P1→P0) ANTES de iniciar Epic 3 (WhatsApp), conforme handoff anterior da Pax"
+
+suggested_command: "@qa *qa-gate 2.5"

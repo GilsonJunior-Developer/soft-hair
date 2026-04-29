@@ -1,0 +1,109 @@
+from_agent: data-engineer
+to_agent: dev
+last_command: apply-migration
+story: "2.5"
+timestamp: "2026-04-27T00:00:00Z"
+consumed: true
+
+context:
+  blocker_resolved: SCHEMA-001
+  story_state: "Story 2.5 InProgress, branch feature/2.5-client-history, agora pronta pra retomar Tasks 4 + 6"
+  migration_file: "supabase/migrations/20260427000000_story_2_5_appointments_notes.sql"
+  applied_to:
+    - environment: softhair-dev
+      project_id: oywizkjldmxhatvftmho
+      applied_at: "2026-04-27T00:00:00Z"
+      method: "Supabase MCP apply_migration"
+      status: success
+    - environment: softhair-prod
+      project_id: zqubqygagvtmvvljbstc
+      applied_at: null
+      status: "PENDING — aplicar via release flow padrão antes do PR merge to main"
+
+what_changed_in_dev:
+  schema:
+    - "public.appointments.notes TEXT (nullable, sem default, sem CHECK)"
+    - "COMMENT ON COLUMN com referência à Story 2.5 AC4"
+  rpc:
+    - "create_appointment_atomic INSERT agora inclui `notes` na lista de colunas e `p_notes` em VALUES"
+    - "Body resto idêntico ao 20260422000005 (gen_random_uuid, salon scope checks, etc.)"
+  privileges:
+    - "REVOKE EXECUTE FROM PUBLIC (idempotente)"
+    - "REVOKE EXECUTE FROM anon (Supabase default-ACL gotcha — ver Notes abaixo)"
+    - "GRANT EXECUTE TO authenticated (preservado)"
+
+verification_done:
+  - check: "Column exists"
+    sql: "SELECT column_name FROM information_schema.columns WHERE table_name='appointments' AND column_name='notes'"
+    result: "OK — text NULLABLE"
+  - check: "RPC INSERT writes notes"
+    sql: "pg_get_functiondef LIKE '%cancel_token, notes%' AND LIKE '%v_cancel_token, p_notes%'"
+    result: "OK"
+  - check: "Privilege state"
+    sql: "SELECT grantee FROM routine_privileges WHERE routine_name='create_appointment_atomic'"
+    result: "authenticated, postgres, service_role (anon REMOVED, PUBLIC vazio)"
+  - check: "Smoke test DO block (UPDATE/SELECT/REVERT em appointment real)"
+    result: "PASS — notes persiste end-to-end via direct UPDATE"
+  - check: "Security advisor (mcp__supabase__get_advisors type=security)"
+    result: "Zero novos warnings introduzidos. Pre-existing tech debt unchanged. authenticated_security_definer_function_executable em create_appointment_atomic é INTENCIONAL."
+  - check: "Performance advisor"
+    result: "Zero novos warnings. unused_index para idx_clients_name_trgm/idx_clients_salon_name é esperado (página /clientes ainda não foi exercida)"
+
+dev_can_now_resume:
+  task_4_editable_notes:
+    files_to_create:
+      - "apps/web/app/(dashboard)/clientes/[id]/notes-editor.tsx (Client Component, textarea + Salvar button)"
+    files_to_modify:
+      - path: "apps/web/app/(dashboard)/clientes/[id]/page.tsx"
+        change: "Re-adicionar `notes: string | null` em ApptRow type; incluir `notes` no select string; renderizar bloco existente (já estava implementado, foi removido temporariamente)"
+      - path: "apps/web/app/(dashboard)/clientes/actions.ts"
+        change: "Adicionar `updateAppointmentNotes(id: string, notes: string)` server action — validar tamanho (sugiro max 2000 chars), checar salon scope com `.eq('salon_id', salonId)` (defesa em profundidade), chamar revalidatePath"
+    test_to_add:
+      - "appointment-notes-action.test.ts — caso de notes muito longa (rejeita), caso de cliente removido (rejeita), caso happy path"
+
+  task_6_perf_check:
+    note: "Pode rodar em softhair-dev via Supabase MCP `execute_sql` com EXPLAIN ANALYZE direto. Sem precisar seedar localmente."
+    suggested_queries:
+      - description: "Lista por nome (search com trigram)"
+        sql: "EXPLAIN ANALYZE SELECT id, name FROM public.clients WHERE salon_id = '<id>' AND deleted_at IS NULL AND name ILIKE '%mar%' LIMIT 25"
+      - description: "Lista por created_at sort"
+        sql: "EXPLAIN ANALYZE SELECT id, name FROM public.clients WHERE salon_id = '<id>' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 25"
+      - description: "Stats aggregation pra IDs"
+        sql: "EXPLAIN ANALYZE SELECT client_id, COUNT(*) FILTER (WHERE status='COMPLETED'), MAX(scheduled_at) FILTER (WHERE status='COMPLETED') FROM public.appointments WHERE salon_id='<id>' AND deleted_at IS NULL AND client_id = ANY('{...25 ids...}') GROUP BY client_id"
+    expected: "p95 < 50ms — todos devem usar índices existentes (idx_clients_salon_name, idx_clients_name_trgm, idx_appointments_salon_date)"
+
+  before_marking_ready_for_review:
+    - "Run CodeRabbit pre-commit per dev coderabbit_integration.workflow"
+    - "Update story 2.5 Change Log com v0.6 (post-resume)"
+    - "Status InProgress → Ready for Review"
+    - "Notify @qa via *qa-gate"
+
+notes:
+  supabase_default_acl_gotcha: |
+    **IMPORTANT discovery**: Supabase grants EXECUTE to `anon` EXPLICITLY (não via PUBLIC inheritance) quando uma SECURITY DEFINER function é criada/replaced. Memory `feedback_postgres_revoke_from_public.md` previa isso, mas confirmamos hoje em prática: `REVOKE FROM PUBLIC` sozinho não foi suficiente — anon ainda tinha EXECUTE depois do CREATE OR REPLACE.
+
+    **Consequência prática:** todas as nossas SECURITY DEFINER functions chamadas APENAS por staff autenticado (ex: create_appointment_atomic, transition_appointment_status, etc.) deveriam fazer REVOKE explícito FROM anon após o GRANT. Auditoria:
+      ```
+      SELECT grantee, privilege_type FROM information_schema.routine_privileges
+      WHERE routine_schema = 'public' AND routine_name = '<func_name>';
+      ```
+    Se anon aparecer e a função não for pública (`/agendamento/{token}` flow etc.), revogar.
+
+    **Backlog suggestion (não bloqueia 2.5):** Audit script para listar todas as SD functions e seus grantees, pra catch em escala. Pode entrar como story de tech debt sob Epic 1 hardening ou Epic 4 (que tem mais SD functions financeiras).
+
+  prod_deployment: |
+    softhair-prod ainda NÃO recebeu a migration. Aplicar via release flow padrão antes do PR merge to main. Pode ser feita pelo @devops na PR creation OU manualmente por mim antes via:
+      - mcp__supabase__apply_migration project_id=zqubqygagvtmvvljbstc
+
+    Para máxima segurança, recomendo aplicar em prod APÓS o PR merge passar CI e antes do deploy do app — janela de migration desync é minimizada.
+
+  rollback_plan: |
+    Se necessário reverter:
+      BEGIN;
+      ALTER TABLE public.appointments DROP COLUMN IF EXISTS notes;
+      -- Restaurar RPC v2 (sem notes no INSERT) executando 20260422000005
+      COMMIT;
+
+    Custo: zero data loss em dev (notes está vazio em todas as rows existentes pré-2026-04-27). Em prod, dependeria de quando aplicar — se já houver dados em notes, o DROP COLUMN destrói (tomar snapshot antes).
+
+suggested_command: "@dev *develop 2.5 (resume Tasks 4 + 6)"

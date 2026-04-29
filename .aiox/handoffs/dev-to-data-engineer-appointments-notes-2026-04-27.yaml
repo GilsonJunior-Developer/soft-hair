@@ -1,0 +1,94 @@
+from_agent: dev
+to_agent: data-engineer
+last_command: develop
+story: "2.5"
+timestamp: "2026-04-27T00:00:00Z"
+consumed: true
+
+context:
+  blocker_id: SCHEMA-001
+  story_state: "Story 2.5 InProgress, branch feature/2.5-client-history"
+  what_blocks: "Story 2.5 AC4 + Task 4 (editable appointment notes) — coluna `appointments.notes` não existe no schema"
+
+discovery:
+  searched_in: "supabase/migrations/20260420000000_initial_schema.sql + todas migrations subsequentes"
+  found:
+    - "appointments table (linhas 289-311) — sem coluna notes"
+    - "create_appointment_atomic RPC tem param `p_notes TEXT DEFAULT NULL` mas NUNCA escreve em lugar nenhum (vestigial — provavelmente reservado pra esta story)"
+    - "clients.notes existe (per-client, não per-appointment) — não substitui AC4"
+  not_found:
+    - "ALTER TABLE appointments ADD COLUMN notes em nenhuma migration"
+    - "appointments.notes em nenhum select/update no app code"
+
+requested_migration:
+  description: "Adicionar coluna `notes TEXT` em `public.appointments` para suportar AC4 da Story 2.5"
+  ddl: |
+    -- Migration suggested name: 20260427000000_appointments_notes_column.sql
+    BEGIN;
+
+    ALTER TABLE public.appointments
+      ADD COLUMN IF NOT EXISTS notes TEXT;
+
+    COMMENT ON COLUMN public.appointments.notes IS
+      'Observações do atendimento (free text, registradas pelo staff pós-serviço). Story 2.5.';
+
+    -- Atualizar create_appointment_atomic para escrever p_notes que já é aceito como parâmetro
+    -- (RPC fica em sync com o schema; param deixou de ser vestigial)
+    CREATE OR REPLACE FUNCTION public.create_appointment_atomic(
+      p_professional_id UUID,
+      p_service_id UUID,
+      p_scheduled_at TIMESTAMPTZ,
+      p_client_id UUID DEFAULT NULL,
+      p_client_name TEXT DEFAULT NULL,
+      p_client_phone TEXT DEFAULT NULL,
+      p_client_email TEXT DEFAULT NULL,
+      p_notes TEXT DEFAULT NULL,
+      p_source TEXT DEFAULT 'MANUAL_BY_STAFF'
+    )
+    RETURNS public.appointments
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $$
+    -- ... (corpo idêntico ao 20260422000005, exceto pelo INSERT que agora inclui `notes`)
+    -- Insert section change:
+    --   INSERT INTO public.appointments (..., source, cancel_token, notes)
+    --   VALUES (..., p_source::public.appointment_source, v_cancel_token, p_notes)
+    $$;
+
+    -- RLS: NÃO precisa de policy nova. Policies existentes em appointments cobrem
+    -- SELECT/UPDATE per salon_id automaticamente. notes herda essas policies.
+
+    COMMIT;
+
+  rls_check: |
+    Verify after apply:
+    SELECT polname, polcmd, polqual::text
+    FROM pg_policy
+    WHERE polrelid = 'public.appointments'::regclass;
+
+    Expected: existing salon_id-scoped policies cobrem leitura/escrita de notes
+    automaticamente (notes faz parte do row, RLS é row-level).
+
+  no_index_needed: "notes não é searchable na Story 2.5 (só read/edit per-appointment). Sem GIN ou trgm necessário."
+
+after_migration_applied:
+  who_resumes: "@dev"
+  steps:
+    - "Atualizar select em apps/web/app/(dashboard)/clientes/[id]/page.tsx para incluir `notes`"
+    - "Re-adicionar `notes: string | null` em ApptRow type"
+    - "Re-adicionar render block de notes em past appointment row"
+    - "Implementar Task 4: NotesEditor (Client Component) + updateAppointmentNotes server action"
+    - "Implementar Task 6: EXPLAIN ANALYZE perf check com seed de 1000 clientes"
+    - "CodeRabbit pre-commit review"
+    - "Status InProgress → Ready for Review"
+
+waivers_to_carry:
+  - "E2E Playwright deferred (Task 8) — herdado de Epic 2 TEST-001 series"
+
+epic_context:
+  epic: 2
+  position: "Última story do Epic 2. Fechá-la = Epic 2 100%"
+  unblocks: "Nada de backlog, mas conclui ciclo operacional do salão"
+
+suggested_command: "Apply migration via Supabase MCP em softhair-dev → validar advisor → notify @dev pra resumir Task 4 + 6"
