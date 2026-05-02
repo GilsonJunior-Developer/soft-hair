@@ -1,0 +1,150 @@
+from_agent: po
+to_agent: devops
+last_command: close-story
+story: "4.1"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.1.commission-rule-engine.md"
+  story_id: "4.1"
+  story_title: "Commission Rule Engine"
+  story_status_at_handoff: "Done"
+  source_handoff: ".aiox/handoffs/qa-to-po-close-4.1-2026-05-02.yaml"
+  branch: "feature/4.1-commission-rule-engine"
+  commit: "ca8c7d5"
+  commits_ahead_of_main: 1
+  base: "main@c008e5c"
+  qa_verdict: "CONCERNS (approved with documented concerns)"
+  po_closure_option: "A — close as-is, register 7 concerns in backlog"
+
+what_was_closed_locally_by_po:
+  - "Story 4.1 status: Ready for Review → Done"
+  - "Story Change Log: v0.4 (qa review) + v0.5 (po close) appended"
+  - "docs/qa/backlog.md: new Story 4.1 section + 7 concerns + aggregate counts updated (24→31 open) + new DEPLOY category"
+  - "Memory project_sprint_state_post_HARD1.md updated to reflect close + next actions"
+
+mandatory_pre_push_sequencing:
+  - id: "DEPLOY-001"
+    severity: medium
+    blocks_deploy: true
+    blocks_push: false
+    description: |
+      Migration `20260502000000_story_4_1_professional_service_commissions`
+      is applied to softhair-DEV ONLY (project_id oywizkjldmxhatvftmho).
+      softhair-PROD (project_id zqubqygagvtmvvljbstc) does NOT yet have the
+      table. App code on this branch references `professional_service_commissions`
+      in 2 places (commission-table-panel + commission-simulator + Server
+      Actions in profissionais/actions.ts). If you deploy app code to prod
+      BEFORE applying migration, the matrix-mode professional detail page
+      and simulator queries will fail.
+    required_sequence: |
+      1. Push branch + create PR
+      2. CI runs (lint + typecheck + tests + e2e + build) — MUST be green
+      3. Founder confirms (per memory reference_supabase_mcp_autonomy.md —
+         prod schema changes always need explicit Founder confirmation)
+      4. Apply migration to softhair-prod via mcp__supabase-project-softhair__
+         apply_migration (project_id zqubqygagvtmvvljbstc, name=
+         "story_4_1_professional_service_commissions", same SQL as the
+         migration file). Migration is idempotent (CREATE IF NOT EXISTS).
+      5. Verify on prod: list_tables shows the new table; pg_policies query
+         shows the RLS policy; the 2 indexes exist (UNIQUE + idx_psc_
+         professional_id).
+      6. Merge PR (squash to main)
+      7. Vercel auto-deploys app
+      8. Smoke test on prod URL: open a professional in TABLE mode →
+         verify matrix renders; open /configuracoes/comissao → verify
+         simulator works. PostgREST may take ~30s to refresh schema cache.
+
+push_checklist:
+  - [ ] git status clean
+  - [ ] git log shows commit ca8c7d5 with full feat() commit message
+  - [ ] git push origin feature/4.1-commission-rule-engine -u
+  - [ ] gh pr create with summary + test plan + DEPLOY-001 callout in body
+  - [ ] Wait for CI green (vitest 63 + e2e 5 specs Chromium+Webkit)
+  - [ ] Coordinate prod migration with Founder
+  - [ ] Apply migration to softhair-prod (with confirmation)
+  - [ ] gh pr merge --squash
+  - [ ] Smoke test prod
+  - [ ] Update memory or notify @sm to *draft 4.2
+
+quality_gates_already_passed:
+  - "lint clean (validated by @dev + re-validated by @qa)"
+  - "typecheck clean (validated x2)"
+  - "vitest 63/63 passing (37 baseline + 26 new commission tests)"
+  - "Next.js build success — all routes compile"
+  - "AC5 invariant: grep -r 'UPDATE.*commission_entries' apps/web/ → 0 matches"
+
+ci_expectation:
+  - "Existing 5 specs HARD.1 baseline (Chromium + Webkit) should pass"
+  - "No E2E spec for Story 4.1 (per WAIVER-E2E-4.1; tracked in 4.1-TEST-002)"
+  - "Lighthouse CI gate (1.7-PERF-002 done) should pass — no UI regressions"
+  - "If CI fails, re-run; if persists, stop and analyze (regression risk likely zero given AC5 + immutable engine)"
+
+backlog_items_registered_during_close:
+  - id: "4.1-DEPLOY-001"
+    priority: P0
+    severity: medium
+    title: "Apply migration to softhair-prod before app deploy"
+    owner: "@devops + Founder"
+  - id: "4.1-MNT-001"
+    priority: P1
+    severity: medium
+    title: "DRY refactor — panel duplicates engine logic"
+    owner: "@dev"
+  - id: "4.1-DOC-001"
+    priority: P2
+    severity: low
+    title: "Fix calculate.ts JSDoc math comment"
+    owner: "@dev"
+  - id: "4.1-SEC-001"
+    priority: P2
+    severity: low
+    title: "App-level role gating on commission Server Actions"
+    owner: "@dev / @data-engineer"
+  - id: "4.1-TEST-001"
+    priority: P1
+    severity: low
+    title: "Integration tests for commission Server Actions"
+    owner: "@dev"
+  - id: "4.1-TEST-002"
+    priority: P2
+    severity: low
+    title: "E2E (Playwright) for matrix + simulator"
+    owner: "@dev"
+  - id: "4.1-DATA-001"
+    priority: P2
+    severity: low
+    title: "FK consistency check on professional_service_commissions"
+    owner: "@data-engineer"
+
+epic_context:
+  epic: "Epic 4 — Finance & Commission"
+  epic_progress: "1/4 stories done (4.1 ✅; 4.2/4.3/4.4 pending)"
+  epic_mvp_scope: "Stories 4.1–4.4 only (4.5–4.7 NFS-e deferred Phase 2)"
+  next_story_to_draft: "4.2 Commission Calculation on Service Completion"
+  next_story_dependencies:
+    - "Story 4.1 engine (resolveRate + calculateCommission) — DONE ✅"
+    - "Story 4.1 schema (commission_entries snapshot pattern) — DONE ✅"
+    - "Story 2.6 (Appointment Status Lifecycle, COMPLETED transition) — DONE ✅ (closed in Epic 2)"
+
+uncommitted_changes_to_commit_before_push:
+  - "docs/stories/4.1.commission-rule-engine.md (status Done + Change Log v0.4 + v0.5 + QA Results)"
+  - "docs/qa/backlog.md (Story 4.1 section + 7 items + aggregate update)"
+  - "docs/qa/gates/4.1-commission-rule-engine.yml (gate file)"
+  - ".aiox/handoffs/dev-to-qa-gate-4.1-2026-05-02.yaml (consumed:true)"
+  - ".aiox/handoffs/qa-to-po-close-4.1-2026-05-02.yaml (consumed:true)"
+  - ".aiox/handoffs/po-to-devops-push-4.1-2026-05-02.yaml (this file, consumed:false)"
+
+next_workflow_step: |
+  @devops runs *push 4.1:
+    1. Stage all post-implementation changes (docs/stories/4.1, docs/qa/*,
+       .aiox/handoffs/*)
+    2. Commit with message like "docs(story-4.1): close + qa gate + backlog"
+       (Co-Authored-By footer)
+    3. Push branch + create PR with body including the DEPLOY-001 callout
+    4. Coordinate prod migration with Founder per the sequencing above
+    5. Merge after CI + migration + Founder go-ahead
+    6. Notify @sm to *draft 4.2 (or Founder decides next priority)
+
+suggested_command: "*push"

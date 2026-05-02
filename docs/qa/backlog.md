@@ -85,6 +85,22 @@ Gate: `docs/qa/gates/2.5-client-history.yml` (CONCERNS — deploy-condition reso
 
 ---
 
+## Story 4.1 — Commission Rule Engine
+
+Gate: `docs/qa/gates/4.1-commission-rule-engine.yml` (CONCERNS — closed 2026-05-02 via Option A)
+
+| ID | Severity | Priority | Status | Título | Owner |
+|---|---|---|---|---|---|
+| 4.1-DEPLOY-001 | medium | P0 | open | Aplicar migration `20260502000000_story_4_1_professional_service_commissions` em **softhair-prod** (project_id `zqubqygagvtmvvljbstc`) ANTES do app deploy. Sequência: (1) apply migration via MCP/Dashboard SQL; (2) verify table + RLS policy + index; (3) merge PR; (4) Vercel deploys; (5) smoke test prod. Schema-additive (CREATE IF NOT EXISTS) → safe ahead of app code. **Bloqueia deploy, não merge.** | @devops + Founder |
+| 4.1-MNT-001 | medium | P1 | open | DRY: `commission-table-panel.tsx::resolveRowSource()` (linhas 38-56) duplica logic do canonical engine `lib/commission/resolve-rate.ts::resolveRate()`. Risco de divergência silenciosa. Refactor: refatorar panel pra usar `resolveRate()` direto. ~10 min. Quick-win antes de Story 4.2. | @dev |
+| 4.1-DOC-001 | low | P2 | open | JSDoc de `apps/web/lib/commission/calculate.ts` linhas 7-9 descreve math com escala errada (`amount_cents = round(price_brl * 100 * percent)` daria 100× o valor). Código (linhas 36-38) está correto — usa rounding de dois passos. Atualizar doc pra match. ~2 min; bundlear com 4.1-MNT-001. | @dev |
+| 4.1-SEC-001 | low | P2 | open | Server Actions `setCommissionTableEntry` + `bulkSetProfessionalServiceCommissions` sem role gating app-level. Qualquer salon member (incl. PROFESSIONAL) pode editar regras. Convention-consistent com Story 1.1 FOR ALL pattern. Hardening: adicionar `is_salon_owner_or_receptionist()` check — afeta a família toda de FOR ALL policies, melhor numa hardening pass dedicada. | @dev / @data-engineer |
+| 4.1-TEST-001 | low | P1 | open | Sem integration tests pras novas Server Actions. Engine tem 26 unit tests mas a action layer (Zod validation, Supabase client interaction, error paths) está descoberta. Precedent: `clientes/actions.test.ts` cobre `softDeleteClient` + `updateAppointmentNotes` com mock supabase. ~30 min. Recomendado antes de Story 4.2 (que depende dos contratos das actions). | @dev |
+| 4.1-TEST-002 | low | P2 | open | Sem E2E (Playwright) coverage pra matrix UI ou simulator. Story Dev Notes marcou como "non-blocking, recommended hygiene". Spec sugerida: `apps/web/e2e/commission-config.spec.ts` cobrindo simulator (qty + price + assert source label) + matrix expand + percent set + persist. ~1h; HARD.1 baseline já em place. | @dev |
+| 4.1-DATA-001 | low | P2 | open | Sem FK consistency check em `professional_service_commissions`: `salon_id == professional.salon_id == service.salon_id` não é enforced. RLS impede read cross-salon, mas teoricamente permite orphan rows na escrita. Theoretical, ~0 exploitability (requer multi-salon membership + UUIDs cross-salon). Optional: trigger ou app-side validation. | @data-engineer |
+
+---
+
 ## Cross-Epic / Framework Hygiene
 
 | ID | Severity | Priority | Status | Título | Owner |
@@ -101,19 +117,20 @@ Gate: `docs/qa/gates/2.5-client-history.yml` (CONCERNS — deploy-condition reso
 
 | Categoria | Abertos | Escalated | Done | Total |
 |---|---|---|---|---|
-| TEST | 2 | 0 | 6 | 8 |
+| TEST | 4 | 0 | 6 | 10 |
 | PERF | 2 | 1 | 1 | 4 |
 | REQ | 4 | 0 | 0 | 4 |
-| MNT | 7 | 0 | 0 | 7 |
-| DOC | 1 | 0 | 0 | 1 |
-| SEC | 0 | 0 | 1 | 1 |
-| DATA | 1 | 0 | 0 | 1 |
+| MNT | 8 | 0 | 0 | 8 |
+| DOC | 2 | 0 | 0 | 2 |
+| SEC | 1 | 0 | 1 | 2 |
+| DATA | 2 | 0 | 0 | 2 |
 | A11Y | 4 | 0 | 0 | 4 |
 | OBS | 1 | 0 | 0 | 1 |
 | TYPES | 1 | 0 | 0 | 1 |
 | VAL | 1 | 0 | 0 | 1 |
 | INFRA | 0 | 0 | 1 | 1 |
-| **Total** | **24** | **1** | **9** | **34** |
+| DEPLOY | 1 | 0 | 0 | 1 |
+| **Total** | **31** | **1** | **9** | **41** |
 
 ### Itens pareados (setup único resolve múltiplos)
 
@@ -134,7 +151,12 @@ Conjunto coeso pra um sprint único de hardening:
 - **2.5-INFRA-001** — atualizar workflows GitHub Actions antes de **2026-06-02** (Node 20 → Node 24 forçado). Deadline-driven, pareia naturalmente com o sprint de hardening.
 - 1.7-PERF-002 — ✅ entregue em PR #19 (Lighthouse CI gate ativo). Item permanece marcado como `escalated` até o backlog ser refatorado para indicar cobertura; sem bloqueio atual.
 
+**P0 — Story 4.1 deploy gate:**
+- **4.1-DEPLOY-001** — apply migration to softhair-prod BEFORE app deploy. Schema-additive, low-risk. Bloqueia deploy do PR de Story 4.1 mas não merge.
+
 **P1 — próximo sprint geral:**
+- **4.1-MNT-001** + **4.1-DOC-001** — DRY refactor + JSDoc fix (~12 min combinado, quick-win antes de Story 4.2)
+- **4.1-TEST-001** — integration tests pras Server Actions de commission (recomendado antes de Story 4.2 que depende dos contratos)
 - **2.4-PERF-001** — move email off critical path (pareia com o momento em que Resend for wired em prod)
 - **2.5-PERF-001** — view server-side pra aggregation quando salões cruzarem 5k clients (hoje o maior parceiro tem ~50, longe do threshold)
 - ~~**2.4-SEC-001**~~ ✅ **DONE 2026-04-25** — resolvido pela Story 2.7 + REVOKE FROM PUBLIC no DB (Quinn gate empiricamente verifica)
@@ -144,6 +166,7 @@ Conjunto coeso pra um sprint único de hardening:
 - 1.6-TEST-002, 1.6-REQ-001 — valor incremental, não-urgente
 - 2.4-DATA-001, 2.4-A11Y-001, 2.4-A11Y-002, 2.4-OBS-001 — polimento pós-MVP
 - 2.5-TYPES-001, 2.5-A11Y-001, 2.5-MNT-001, 2.5-MNT-002, 2.5-VAL-001 — polimento Story 2.5 (types regen, aria-expanded refinement, setTimeout cleanup, branch cleanup, UUID pre-validation)
+- 4.1-SEC-001, 4.1-TEST-002, 4.1-DATA-001 — polimento Story 4.1 (role gating, E2E, FK consistency)
 
 ---
 
