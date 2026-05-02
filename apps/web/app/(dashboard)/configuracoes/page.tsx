@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -86,6 +87,38 @@ export default async function ConfiguracoesPage() {
           </div>
         ))}
       </dl>
+
+      <nav className="flex flex-col gap-2">
+        <h2
+          className="text-sm font-semibold"
+          style={{ color: 'var(--color-text-strong)' }}
+        >
+          Configurações avançadas
+        </h2>
+        <ul
+          className="divide-y overflow-hidden rounded-[var(--radius-lg)] border"
+          style={{
+            borderColor: 'var(--color-border)',
+            backgroundColor: 'var(--color-surface)',
+          }}
+        >
+          <li>
+            <Link
+              href="/configuracoes/comissao"
+              className="flex items-center justify-between px-4 py-3 text-sm hover:underline"
+              style={{ color: 'var(--color-text-strong)' }}
+            >
+              <span>Simulador de comissão</span>
+              <span
+                className="text-xs"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Story 4.1 →
+              </span>
+            </Link>
+          </li>
+        </ul>
+      </nav>
     </section>
   );
 }

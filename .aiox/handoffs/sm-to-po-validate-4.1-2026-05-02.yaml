@@ -1,0 +1,119 @@
+from_agent: sm
+to_agent: po
+last_command: draft
+story: "4.1"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.1.commission-rule-engine.md"
+  story_id: "4.1"
+  story_title: "Commission Rule Engine"
+  source_handoff: ".aiox/handoffs/pm-to-sm-epic-4-active-2026-05-02.yaml"
+  status_when_handed_off: "Draft"
+
+draft_summary: |
+  First story of Epic 4 (Finance & Commission, MVP scope 4.1–4.4 only). Implements
+  the rule resolution engine + storage for AC1(b) TABLE mode + simulator UI + tests.
+  Heavy reliance on schema verification — found ~80% of needed schema already
+  shipped in Story 1.1, AC2 already 100% implemented in Story 1.6, AC1(a) ~50%
+  in Story 1.5. Story 4.1 closes the gap.
+
+  6 ACs verbatim from PRD. 6 tasks (Task 1 conditional). CodeRabbit Integration
+  populated (API/Backend primary, Database + Frontend secondary, complexity
+  Medium-High). @dev light mode self-healing.
+
+self_check_against_story_draft_checklist:
+  result: READY
+  clarity_score: 8
+  partial_items:
+    - "Self-Containment: 2 AC interpretations explicitly deferred to @po (with full trade-off analysis to support decision)"
+  flags_for_po:
+    - id: "FLAG-AC1B-INTERPRETATION"
+      severity: HIGH
+      desc: |
+        AC1(b) TABLE mode is a design decision pending. Schema enum
+        `commission_mode = ('PERCENT_FIXED', 'TABLE')` was planned in Story 1.1
+        but TABLE mode never had backing data. Story 1.5 ships the radio
+        but mode TABLE is inert today.
+
+        SM recommends Interpretation A (new table `professional_service_commissions`
+        for per-prof × per-service rates) because:
+          - Literal reading of "tabela por serviço (overrides específicos)"
+          - Story 1.5 already exposed TABLE radio — owners expect functionality
+          - Differentiator vs Trinks/Avec depends on this flexibility
+
+        Alternative B (TABLE = use service overrides only, zero schema change)
+        is documented with full trade-off table in Dev Notes. @po picks A or B.
+
+        Implication of choice:
+          - A → Task 1 stays (migration), Task 3.1-3.2 stays (matrix UI), story
+            stays Medium-High complexity
+          - B → Task 1 skip, Task 3 rewrites as note, story drops to Low-Medium
+
+    - id: "FLAG-AC3-SUM-100"
+      severity: MEDIUM
+      desc: |
+        AC3 "Validação: total (% profissional + % salão) = 100%" — schema has no
+        `salon_percent` field. SM recommends interpretation: salon share is derived
+        (`100 - prof_pct`); UI displays this; validation is just the existing
+        CHECK 0-100 on prof percent.
+
+        Alternative (improbable): there's a stored salon_percent somewhere we
+        missed. @po confirms.
+
+    - id: "FLAG-SIMULATOR-LOCATION"
+      severity: LOW
+      desc: |
+        Task 4.5 leaves the simulator's URL location ambiguous (`/financeiro/comissao`
+        vs `/configuracoes/comissao`). `/financeiro` is currently a ComingSoon stub
+        that says "ETA Epic 4". @po picks placement aligned with UX intent.
+
+priority_validation_checks:
+  - "AC1(a) PERCENT_FIXED — already partially implemented in Story 1.5 (radio + default_percent input). Confirm AC1 isn't redundant; story 4.1 adds the TABLE half + engine."
+  - "AC2 — already 100% implemented in Story 1.6 (services.commission_override_percent persisted). Confirm story 4.1 correctly notes 'no work needed' rather than re-implementing."
+  - "AC5 immutability — confirm engine NEVER UPDATEs commission_entries; only INSERTs. Test required (rejection-grade)."
+  - "AC6 unit tests — confirm 12+ scenarios listed in Task 2.4 cover all precedence + edge cases."
+  - "Architecture mismatch — Dev Notes call out that `packages/core` (referenced in docs/architecture.md:86) doesn't exist; convention switched to `apps/web/lib/{domain}/`. This is a pre-existing drift, not introduced by 4.1, but worth ack from @po."
+
+prerequisites_called_out_in_story:
+  - "@data-engineer applies migration via mcp__supabase-project-softhair__apply_migration in softhair-dev (project_id oywizkjldmxhatvftmho) — IF Interpretation A approved"
+  - "Types regen via mcp__supabase-project-softhair__generate_typescript_types after migration — packages/db/types/database.ts"
+  - "Branch creation: feature/4.1-commission-rule-engine (@sm authorized for local branch ops; @dev or @sm creates at story start)"
+
+resolved_during_drafting:
+  - schema_state_verified: |
+      Used mcp__supabase-project-softhair__list_tables on softhair-dev (oywizkjldmxhatvftmho).
+      Confirmed all 4 commission-relevant fields exist in current production schema:
+        - professionals.commission_mode (enum)
+        - professionals.commission_default_percent (default 40)
+        - services.commission_override_percent (nullable)
+        - appointments.commission_calculated_brl (nullable)
+        - commission_entries table (RLS enabled, 0 rows, snapshot pattern intact)
+  - ui_state_verified: |
+      Grepped apps/web for commission_* references. Confirmed:
+        - profissionais/professional-form.tsx:31,322-336 has TABLE radio (UI-only, no persistence)
+        - servicos/actions.ts:76,115 + service-form.tsx:73 fully persists override (AC2 done)
+        - financeiro/page.tsx is ComingSoon stub
+        - Zero calculation/engine code anywhere (grep returned nothing)
+  - architecture_drift_acknowledged: |
+      packages/core mentioned in docs/architecture.md:86 doesn't exist. Convention
+      switched to apps/web/lib/{domain}/ (precedent: apps/web/lib/booking/). Story 4.1
+      follows real convention, not aspirational. Architecture.md update out of scope.
+
+constitutional_compliance:
+  - "Article IV (No Invention): All 6 ACs traced verbatim to docs/prd/epic-4-finance-commission-nfs-e.md lines 11-18 ✅. Schema fields traced to migration 20260420000000:30,205-206,233. UI references file:line specific."
+  - "Authority: @sm drafted (allowed). @sm authored Dev Notes + flagged ambiguities (allowed). @sm did NOT modify ACs (correct — those are @po territory if they need adjustment after validation)."
+  - "IDS Article IV-A: G2 advisory only. SM consulted existing patterns (booking lib, ADR-0003 location, snapshot pattern in commission_entries). REUSE > ADAPT > CREATE applied: REUSE existing schema 80%, ADAPT precedence engine pattern from booking/cancel-window logic, CREATE only the per-prof × per-service table (justified because no existing entity covers per-prof per-service rates)."
+
+next_workflow_step: |
+  @po runs *validate-story-draft 4.1 with 10-point checklist + decides on
+  3 flags. Expected verdicts:
+
+  - GO (≥7/10) with Interpretation A: story stays as drafted, hand back to @sm
+    for branch creation OR direct to @dev for *develop
+  - GO with Interpretation B: minor edits to Task 1 + Task 3 needed, can be done
+    in-validation by @po or returned to @sm for revision
+  - NO-GO (<7/10): unlikely given draft completeness; would indicate missed AC
+
+suggested_command: "*validate-story-draft 4.1"

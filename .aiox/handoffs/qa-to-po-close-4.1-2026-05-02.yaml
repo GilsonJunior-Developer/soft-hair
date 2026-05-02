@@ -1,0 +1,151 @@
+from_agent: qa
+to_agent: po
+last_command: review
+story: "4.1"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.1.commission-rule-engine.md"
+  gate_file: "docs/qa/gates/4.1-commission-rule-engine.yml"
+  story_id: "4.1"
+  story_title: "Commission Rule Engine"
+  source_handoff: ".aiox/handoffs/dev-to-qa-gate-4.1-2026-05-02.yaml"
+  status_when_handed_off: "Ready for Review"
+  branch: "feature/4.1-commission-rule-engine"
+  commit: "ca8c7d5"
+
+verdict: CONCERNS
+verdict_summary: |
+  All 6 ACs PASS. All 7 lifecycle checks pass (2 with notes). Independent
+  re-verification confirmed: lint clean, typecheck clean, 63/63 tests
+  passing, AC5 immutability grep returns 0 matches. Implementation quality
+  is high — engine exemplary (pure functions, integer-cents math, well-
+  documented). Verdict CONCERNS rather than PASS because of one operational
+  sequencing concern (prod migration not yet applied — same pattern as
+  Story 2.5) plus 6 backlog-able code-quality concerns. None block merge.
+
+independent_reverification:
+  lint: "✓ No ESLint warnings or errors"
+  typecheck: "exit 0"
+  tests: "63/63 passed (37 baseline + 26 new) in 39.20s"
+  ac5_invariant_grep: "0 matches"
+
+concerns_to_register_in_backlog:
+  - id: DEPLOY-001
+    severity: medium
+    category: deployment
+    title: "Apply Story 4.1 migration to softhair-prod BEFORE deploying app"
+    blocks_deploy: true
+    recommendation: |
+      @devops sequence at deploy time: (1) apply migration to prod via
+      Supabase MCP/Dashboard SQL editor; (2) verify table + RLS policy + index
+      exist; (3) merge PR; (4) Vercel deploys; (5) smoke test prod URLs.
+      Migration is schema-additive (CREATE IF NOT EXISTS) — safe to apply
+      ahead of app deploy.
+    suggested_owner: "@devops"
+
+  - id: 4.1-MNT-DRY-001
+    severity: medium
+    category: maintenance
+    title: "DRY: panel duplicates engine logic"
+    blocks_deploy: false
+    recommendation: |
+      Refactor commission-table-panel.tsx::resolveRowSource() to call canonical
+      resolveRate() from apps/web/lib/commission/. ~10 minutes work. Quick-win
+      candidate before Story 4.2.
+    suggested_owner: "@dev"
+
+  - id: 4.1-MNT-DOC-001
+    severity: low
+    category: docs
+    title: "Fix calculate.ts JSDoc math comment"
+    blocks_deploy: false
+    recommendation: |
+      Lines 7-9 of calculate.ts describe wrong scaling. Update to match the
+      actual two-step rounding code on lines 36-38. ~2 minutes; bundle with
+      DRY-001 follow-up.
+    suggested_owner: "@dev"
+
+  - id: 4.1-MNT-SECURITY-001
+    severity: low
+    category: authorization
+    title: "Add app-level role gating on commission Server Actions"
+    blocks_deploy: false
+    recommendation: |
+      Currently any salon member (incl. PROFESSIONAL) can call
+      setCommissionTableEntry/bulkSet. Convention-consistent with Story 1.1
+      FOR ALL pattern but worth gating finance-sensitive operations to
+      OWNER/RECEPTIONIST. Likely a hardening pass affecting the whole
+      Story 1.1 family.
+    suggested_owner: "@dev or @data-engineer"
+
+  - id: 4.1-TEST-001
+    severity: low
+    category: tests
+    title: "Add integration tests for commission Server Actions"
+    blocks_deploy: false
+    recommendation: |
+      Vitest tests with mocked Supabase client (precedent: clientes/actions.
+      test.ts). Cover percent boundary rejection, salon_id missing path,
+      delete vs upsert, bulk onlyEmpty filter. ~30 min; recommended before
+      Story 4.2 since 4.2 depends on these contracts.
+    suggested_owner: "@dev"
+
+  - id: 4.1-TEST-002
+    severity: low
+    category: tests
+    title: "Add E2E (Playwright) for commission matrix + simulator"
+    blocks_deploy: false
+    recommendation: |
+      `apps/web/e2e/commission-config.spec.ts` covering simulator + matrix
+      flows. ~1 hour; HARD.1 baseline already in place.
+    suggested_owner: "@dev"
+
+  - id: 4.1-DATA-001
+    severity: low
+    category: data-integrity
+    title: "FK consistency check on professional_service_commissions"
+    blocks_deploy: false
+    recommendation: |
+      Optional CHECK or trigger enforcing salon_id == prof.salon_id == service.
+      salon_id. Theoretical orphaned-row risk only; ~0 exploitability since
+      RLS prevents reading from wrong-salon perspective. Backlog hygiene item.
+    suggested_owner: "@data-engineer"
+
+acceptance_criteria_status:
+  - ac: 1, status: PASS
+  - ac: 2, status: PASS
+  - ac: 3, status: PASS
+  - ac: 4, status: PASS
+  - ac: 5, status: PASS (invariant grep verified)
+  - ac: 6, status: PASS
+
+waivers_accepted:
+  - "WAIVER-CODERABBIT-DEV-4.1 (no WSL; GH App on PR)"
+  - "WAIVER-CODERABBIT-QA-4.1 (same)"
+  - "WAIVER-E2E-4.1 (story marked non-blocking)"
+
+suggested_po_workflow:
+  step_1: "Read gate file docs/qa/gates/4.1-commission-rule-engine.yml for full detail"
+  step_2: "Decide branching: option A (close as-is, register 7 concerns in backlog, hand to @devops) | option B (route DRY-001 + DOC-001 back to @dev for ~12 min quick fix before push, then close)"
+  step_3a_if_close_directly: |
+    Run *close-story 4.1 + *backlog-add for each of the 7 concerns
+    (DEPLOY-001 → register but mark deploy-time; rest as MNT/TEST/DATA items)
+    Then handoff to @devops *push
+  step_3b_if_quick_fix_first: |
+    Handoff to @dev *apply-qa-fixes 4.1 with DRY-001 + DOC-001 scope
+    Then re-review (light touch — just confirm those 2 items closed)
+    Then *close-story 4.1 + register remaining 5 concerns
+
+next_workflow_step_recommended: |
+  Option A (close as-is). Justification: all 7 concerns are non-blocking;
+  DEPLOY-001 is operational not code; DRY-001 + DOC-001 add zero user-facing
+  value but slow down the merge. Velocity over polish for design-partner urgency.
+  Founder memory feedback_velocity_over_process_when_signals_strong applies:
+  signals are strong (lint clean, 63/63 tests, AC5 invariant verified, all
+  ACs traced, 26 new tests with float-drift edge cases — high quality bar
+  achieved by the dev). The 12-minute fix can ship in next dev session
+  bundled with Story 4.2 prep.
+
+suggested_command: "*close-story 4.1"

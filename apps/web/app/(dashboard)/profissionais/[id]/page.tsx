@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { CopyLinkButton } from '@/components/ui/copy-link-button';
 import { ProfessionalForm } from '../professional-form';
 import { ProfessionalActions } from './professional-actions';
+import { CommissionTablePanel } from './commission-table-panel';
 import { DEFAULT_WORKING_HOURS, type WorkingHours } from '../types';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +43,48 @@ export default async function EditProfissionalPage({
     salonRow?.slug && professional.is_active
       ? `/${salonRow.slug}/${professional.slug}`
       : null;
+
+  // Story 4.1 — fetch commission table state when professional is in TABLE mode
+  const isTableMode = professional.commission_mode === 'TABLE';
+
+  let commissionServices: Array<{
+    id: string;
+    name: string;
+    category: string;
+    commission_override_percent: number | null;
+  }> = [];
+  let commissionEntries: Array<{ service_id: string; percent: number }> = [];
+
+  if (isTableMode) {
+    const [{ data: services }, { data: entries }] = await Promise.all([
+      supabase
+        .from('services')
+        .select('id, name, category, commission_override_percent')
+        .eq('salon_id', professional.salon_id)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('category', { ascending: true })
+        .order('name', { ascending: true }),
+      supabase
+        .from('professional_service_commissions')
+        .select('service_id, percent')
+        .eq('professional_id', professional.id),
+    ]);
+
+    commissionServices = (services ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      category: s.category,
+      commission_override_percent:
+        s.commission_override_percent !== null
+          ? Number(s.commission_override_percent)
+          : null,
+    }));
+    commissionEntries = (entries ?? []).map((e) => ({
+      service_id: e.service_id,
+      percent: Number(e.percent),
+    }));
+  }
 
   return (
     <section className="flex flex-col gap-6">
@@ -90,6 +133,17 @@ export default async function EditProfissionalPage({
           ),
         }}
       />
+
+      {isTableMode && (
+        <CommissionTablePanel
+          professionalId={professional.id}
+          professionalDefaultPercent={Number(
+            professional.commission_default_percent,
+          )}
+          services={commissionServices}
+          entries={commissionEntries}
+        />
+      )}
     </section>
   );
 }

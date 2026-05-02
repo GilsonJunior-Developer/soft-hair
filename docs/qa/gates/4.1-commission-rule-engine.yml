@@ -1,0 +1,384 @@
+storyId: "4.1"
+storyTitle: "Commission Rule Engine"
+verdict: CONCERNS
+verdictRationale: |
+  All 6 ACs implemented and verified independently. Engine quality is excellent
+  — pure functions, integer-cents math (no float drift), well-documented 3-tier
+  precedence rule (ADR-0004), 26 unit tests covering precedence + boundaries +
+  rounding + meaningful-zero distinction + defensive cases. Schema migration
+  applied to softhair-dev cleanly. RLS in paridade with existing pattern.
+  Build green (2.05 kB simulator + 3.1 kB matrix page).
+
+  Verdict is CONCERNS (not PASS) for ONE deployment-timing concern + three
+  code-quality observations:
+
+  1. **DEPLOY-001 (MEDIUM)**: softhair-prod migration is NOT applied yet.
+     Same operational pattern as Story 2.5 — schema-additive, low-risk to
+     deploy ahead of app code. @devops MUST apply migration to prod BEFORE
+     deploying app, otherwise the new `professional_service_commissions`
+     queries will fail in production.
+
+  2. **DRY-001 (MEDIUM)**: `commission-table-panel.tsx::resolveRowSource()`
+     duplicates the engine logic from `apps/web/lib/commission/resolve-rate.ts`.
+     Both produce the same result today, but the panel implementation is
+     simplified (no professional.commissionMode check because it's only rendered
+     when mode === 'TABLE'). Risk: silent divergence if engine logic changes.
+     Should refactor to call the canonical engine.
+
+  3. **DOC-001 (LOW)**: `calculate.ts` JSDoc comment line 8 describes
+     `amount_cents = round(price_brl * 100 * percent)` which would yield 100x
+     the correct result. The actual code uses two-step rounding that is
+     mathematically correct. Doc comment misleads the next reader.
+
+  4. **SECURITY-001 (LOW)**: Server Actions (`setCommissionTableEntry`,
+     `bulkSetProfessionalServiceCommissions`) have NO app-level role gating.
+     Any salon member (including PROFESSIONAL role) can call them. RLS allows
+     this because the policy is `FOR ALL` — convention-consistent with
+     `professionals_all` and `services_all` shipped in Story 1.1. However for
+     a finance-sensitive operation, OWNER/RECEPTIONIST gating is reasonable.
+
+  None of these block merge. The implementation is ready to ship; concerns
+  are tracked as backlog items.
+
+reviewer: Quinn (Guardian)
+reviewedAt: "2026-05-02T00:00:00Z"
+branch: feature/4.1-commission-rule-engine
+commitsAhead: 1
+
+acceptanceCriteriaCoverage:
+  AC1_two_modes_PERCENT_FIXED_and_TABLE:
+    status: PASS
+    evidence: |
+      PERCENT_FIXED mode pre-shipped Story 1.5 (radio + default_percent input
+      in professional-form.tsx:31, 322-336). TABLE mode now has backing data
+      via new table `professional_service_commissions` + matrix UI in
+      `commission-table-panel.tsx` (rendered only when mode === 'TABLE' per
+      page.tsx:48). Engine in `resolve-rate.ts` distinguishes both modes
+      (line 24: TABLE mode + entry → tier 1; otherwise tier 2/3). 12 unit
+      tests cover all permutations (resolve-rate.test.ts).
+  AC2_service_override_overrides_professional_default:
+    status: PASS
+    evidence: |
+      `services.commission_override_percent` shipped Story 1.6 (verified in
+      service-form.tsx:73 + actions.ts:76,115). Engine consumes it as tier 2
+      in resolveRate (resolve-rate.ts:32-37). resolve-rate.test.ts:33-41
+      covers PERCENT_FIXED+override path; :60-72 covers TABLE-fallback-to-
+      override; meaningful-zero distinction tested at :109-118.
+  AC3_sum_prof_plus_salon_equals_100:
+    status: PASS
+    evidence: |
+      UI displays salon share derived as `100 - prof_pct` in real-time:
+      commission-table-panel.tsx:269 (matrix) + commission-simulator.tsx:113
+      (simulator). Schema CHECK `BETWEEN 0 AND 100` on
+      `professional_service_commissions.percent` enforces range at DB level.
+      No `salon_percent` field needed — derivation is mathematical identity.
+      Per @po validation 2026-05-02 — interpretation approved.
+  AC4_simulator_interactive:
+    status: PASS
+    evidence: |
+      `commission-simulator.tsx` renders dropdowns (professional + service) +
+      qty (1-100) + unit price inputs; `useMemo` recomputes resolveRate +
+      calculateCommission on input change (lines 86-122); output text matches
+      PRD example format ("Se você fizer X serviço a R$ Y, profissional ganha
+      R$ Z"). Source label badge shown for transparency (line 215+). Located
+      at /configuracoes/comissao with link from /configuracoes index page.
+  AC5_history_immutability:
+    status: PASS
+    evidence: |
+      Engine in `apps/web/lib/commission/` is pure — does NOT import any
+      Supabase client. Server Actions in profissionais/actions.ts only
+      reference `professional_service_commissions` (new table), NEVER
+      `commission_entries`. Verified structurally:
+      `grep -r 'UPDATE.*commission_entries\|.update.*commission_entries' apps/web/`
+      returns ZERO matches. Story 4.2 will be the first writer to
+      commission_entries (snapshot pattern). Schema design enforces it:
+      commission_entries has snapshot fields (`percent_applied`,
+      `commission_amount_brl`) captured at COMPLETED time.
+  AC6_unit_test_extensive:
+    status: PASS
+    evidence: |
+      26 vitest tests in `apps/web/lib/commission/{resolve-rate,calculate}.test.ts`.
+      resolve-rate (12 tests): 3-tier precedence × 5 fallback combinations,
+      boundaries 0%/100%, meaningful-zero (entry=0 vs null), defensive (mode
+      mismatch), realistic PRD scenario. calculate (14 tests): PRD example
+      (R$50 × 40% = R$20), simple, zero, 100%, large numbers, rounding HALF_UP
+      (33.33%×R$10=3.33, 33.33%×R$9.97=3.32, 0.5-cent boundary), float drift
+      avoidance (0.1×30%=0.03 exact), throws on bad input, discounted-price
+      contract.
+
+sevenChecksFromStoryLifecycle:
+  code_review:
+    status: PASS_WITH_NOTE
+    notes: |
+      Engine code is exemplary — pure functions, integer-cents math, jsdoc
+      with precedence rule documented, 100% test coverage on the 2 functions.
+      Server Actions follow existing pattern (ActionResult union, Zod validation,
+      revalidatePath). UI component structure mirrors existing patterns
+      (commission-table-panel separates business state into useMemo, draft state
+      kept local in CommissionRow). One soft-DRY violation in panel
+      (resolveRowSource duplicates engine) — see DRY-001 below.
+  unit_tests:
+    status: PASS
+    notes: |
+      63/63 passing across 8 test files. New: 12 in resolve-rate.test.ts +
+      14 in calculate.test.ts. Edge cases excellent (meaningful zero,
+      float drift, HALF_UP rounding at .5 boundary). No tests for Server
+      Actions yet (see TEST-002).
+  acceptance_criteria:
+    status: PASS
+    notes: "All 6 ACs implemented and validated above with file:line evidence."
+  no_regressions:
+    status: PASS
+    notes: |
+      37 baseline tests preserved unchanged (appointment-token, cancel-window,
+      clientes/actions, login/actions, search-query, healthz). Pre-existing
+      routes (profissionais/[id], configuracoes) modified additively only —
+      isTableMode conditional branch preserves PERCENT_FIXED-mode professionals
+      unchanged.
+  performance:
+    status: PASS
+    notes: |
+      Engine is O(1) — pure functions with no I/O. Page load: 2 parallel
+      queries (Promise.all) only when TABLE mode is active. Indexed lookups:
+      UNIQUE (professional_id, service_id) auto-creates index for engine
+      hot-path; secondary `idx_psc_professional_id` for matrix UI fetch.
+      Build sizes minimal (2.05 kB simulator, 3.1 kB profissionais detail).
+  security:
+    status: PASS_WITH_NOTE
+    notes: |
+      Strengths:
+      - RLS on professional_service_commissions in paridade com existing
+        pattern (FOR ALL, salon_id-based)
+      - Zod validation 0-100 on Server Action input
+      - No SQL injection risk (Supabase client uses parameterized queries)
+      - No secrets in code; no console.log of sensitive data
+      - error logs use prefixed format ([setCommissionTableEntry] / [bulkSet...])
+
+      Notes:
+      - SECURITY-001: No app-level role gating (PROFESSIONAL can call actions).
+      - DATA-001: No FK consistency check (salon_id == prof.salon_id ==
+        service.salon_id). RLS prevents cross-salon read but allows orphan
+        rows on degenerate input. Theoretical, ~0 exploitability.
+  documentation:
+    status: PASS
+    notes: |
+      ADR-0004 documents 3-tier precedence + immutability invariant + 3
+      alternatives rejected with rationale. Migration file has rich header
+      comment + COMMENT ON TABLE + COMMENT ON COLUMN. packages/db/README.md
+      v0.3.0 with new "Commission tables (Story 4.1)" section. Decision log
+      `.ai/decision-log-4.1.md` captures 5 autonomous decisions made in YOLO
+      mode (D-001 migration via MCP, D-002 NUMERIC choice, D-003 lib location,
+      D-004 pure functions, D-005 mode-flip preservation).
+
+issues:
+  - id: DEPLOY-001
+    severity: medium
+    category: deployment
+    description: |
+      Migration `20260502000000_story_4_1_professional_service_commissions`
+      applied to softhair-dev only. App code (release branch) depends on
+      `professional_service_commissions` table. If @devops merges + deploys
+      app before applying migration to prod, the matrix-mode professional
+      detail page query and simulator's entries fetch will fail.
+    recommendation: |
+      @devops MUST apply migration to softhair-prod BEFORE deploying the app.
+      Sequence:
+      1. Apply migration via Supabase MCP or Dashboard SQL editor (idempotent
+         due to IF NOT EXISTS)
+      2. Verify table exists + RLS policy active + index created
+      3. Merge PR to main
+      4. Vercel deploys app
+      5. Smoke test on prod: navigate to a TABLE-mode professional's detail
+         page, verify matrix renders; navigate to /configuracoes/comissao,
+         verify simulator works.
+      Migration is schema-additive (CREATE TABLE IF NOT EXISTS) — safe to
+      deploy ahead of app code.
+    blockingMerge: false
+    blockingDeploy: true
+
+  - id: DRY-001
+    severity: medium
+    category: tech-debt
+    description: |
+      `apps/web/app/(dashboard)/profissionais/[id]/commission-table-panel.tsx`
+      lines 38-56 (`resolveRowSource()`) duplicates the engine logic from
+      `apps/web/lib/commission/resolve-rate.ts::resolveRate()`. Today both
+      yield the same result for the panel context (TABLE mode only), but
+      they are independent code paths that could diverge silently if the
+      canonical precedence rule changes.
+    recommendation: |
+      Refactor commission-table-panel.tsx to call `resolveRate()` from
+      the canonical engine. Pass professional state via props (already
+      has `professionalDefaultPercent`; add `commissionMode='TABLE'` literal).
+      Alternative: extract the common shape into a wrapper helper. Either
+      way, eliminate the duplication. ~10 minutes of work; can be a quick-win
+      follow-up after merge.
+    blockingMerge: false
+
+  - id: DOC-001
+    severity: low
+    category: docs
+    description: |
+      `apps/web/lib/commission/calculate.ts` JSDoc lines 7-9 describe the math
+      as `amount_cents = round(price_brl * 100 * percent)` followed by
+      `amount_brl = amount_cents / 10000`. This describes a single-rounding
+      formulation that yields 100× the correct result. The actual code (lines
+      36-38) uses a two-step rounding that is mathematically correct.
+    recommendation: |
+      Update the JSDoc to match the actual math:
+      ```
+      Math (avoiding float drift):
+        priceInCents      = round(price_brl * 100)
+        commissionInCents = round(priceInCents * percent / 100)
+        amount_brl        = commissionInCents / 100
+      ```
+      ~2 minutes of work. Safe to do as part of DRY-001 follow-up.
+    blockingMerge: false
+
+  - id: SECURITY-001
+    severity: low
+    category: authorization
+    description: |
+      Server Actions `setCommissionTableEntry` and
+      `bulkSetProfessionalServiceCommissions` rely solely on RLS for
+      authorization. RLS policy is `FOR ALL salon_id IN current_user_salon_ids()`
+      — convention-consistent with existing tables (professionals_all,
+      services_all) per Story 1.1. However for a finance-sensitive operation,
+      restricting writes to OWNER/RECEPTIONIST roles would be reasonable.
+      A PROFESSIONAL salon member can currently edit their own commission
+      rates via the Server Action.
+    recommendation: |
+      Backlog item: add `is_salon_owner_or_receptionist()` check at action
+      entry. Could be a generic helper (no such function exists in
+      `current_user_salon_ids()` family — only `is_salon_owner()` exists).
+      Could fix the entire Story 1.1 family of FOR ALL policies in a
+      hardening pass. Not blocking 4.1 — convention-consistent.
+    blockingMerge: false
+
+  - id: TEST-001
+    severity: low
+    category: tests
+    description: |
+      No integration tests for Server Actions (setCommissionTableEntry,
+      bulkSetProfessionalServiceCommissions). Engine has 26 unit tests but
+      the action layer (Zod validation, Supabase client interaction, error
+      paths) is uncovered.
+    recommendation: |
+      Add vitest tests with mocked Supabase client (precedent:
+      `app/(dashboard)/clientes/actions.test.ts` covers `softDeleteClient`
+      and `updateAppointmentNotes` with this pattern). Cover: percent boundary
+      validation rejection, salon_id missing, delete vs upsert paths, bulk
+      onlyEmpty filter. ~30 minutes of work. Not blocking — can be added
+      before Story 4.2 (which will rely on these actions' contracts).
+    blockingMerge: false
+
+  - id: TEST-002
+    severity: low
+    category: tests
+    description: |
+      No E2E (Playwright) coverage for the matrix UI or simulator. Story
+      Dev Notes line 222-223 explicitly mark E2E as "non-blocking, recommended
+      hygiene". HARD.1 established the E2E baseline; new UI surfaces should
+      ideally have at least a smoke spec.
+    recommendation: |
+      Backlog item HARD.1-FU-003 or 4.1-TEST-001: add
+      `apps/web/e2e/commission-config.spec.ts` covering: open simulator, pick
+      prof + service, set qty=10 + price=50, assert commission resolves
+      correctly with the right source label. Also: open a TABLE-mode prof's
+      detail page, expand the matrix, set a percent, assert it persists. ~1
+      hour of work. Not blocking; can be promoted to P0 if Story 4.2 has
+      test gaps.
+    blockingMerge: false
+
+  - id: DATA-001
+    severity: low
+    category: data-integrity
+    description: |
+      `professional_service_commissions` schema has FK to professionals(id)
+      and services(id) but no CHECK constraint that
+      `salon_id = professional.salon_id` AND `salon_id = service.salon_id`.
+      A user member of multiple salons could theoretically write a row with
+      mismatched salon. RLS prevents reading from the wrong-salon perspective,
+      so harm is limited to data hygiene, not privilege escalation.
+    recommendation: |
+      Optional: add a trigger or CHECK constraint enforcing FK consistency.
+      Simpler alternative: validate in Server Action. ~10 minutes. Not
+      blocking — exploitability is ~0 (requires multi-salon membership +
+      knowing UUIDs of cross-salon entities).
+    blockingMerge: false
+
+waiversAccepted:
+  - id: WAIVER-CODERABBIT-DEV-4.1
+    description: "CodeRabbit pre-commit (dev workflow) not run — WSL infra missing"
+    rationale: |
+      Founder dev machine has no WSL; CodeRabbit CLI unavailable. Precedent:
+      HARD.1, 2.5, 2.7 all merged without CLI. GitHub App PR review will run
+      on push (tracked in MNT-DEVOPS-001). Manual review covered the
+      equivalent depth (numeric precision, security, RLS, AC5 invariant via
+      grep, anti-hallucination via file:line citations).
+    expiresAt: "When MNT-DEVOPS-001 (CodeRabbit GitHub App install) is closed"
+  - id: WAIVER-CODERABBIT-QA-4.1
+    description: "CodeRabbit qa-review (committed mode) not run — same WSL infra issue"
+    rationale: "Same as above. Manual review independently re-ran lint + typecheck + tests + build, audited engine math + RLS + Zod validation + AC5 grep, inspected DRY violations + doc nits."
+    expiresAt: "When MNT-DEVOPS-001 is closed"
+  - id: WAIVER-E2E-4.1
+    description: "E2E (Playwright) coverage deferred per story Dev Notes (non-blocking)"
+    rationale: "Story 4.1 marked E2E as recommended hygiene, not requirement. Engine has 26 unit tests covering all critical math + precedence paths. UI is cosmetic over engine — engine correctness is what matters. Manual smoke check via running dev server can be done by Founder before deploy."
+    expiresAt: "Before Story 4.2 ships (which depends on engine contracts)"
+
+testCoverageSummary:
+  unit_tests:
+    total: 63
+    passing: 63
+    new_in_4_1:
+      - "resolve-rate.test.ts: 12 cases (3-tier precedence, boundaries, defensive, meaningful zero, realistic)"
+      - "calculate.test.ts: 14 cases (PRD example, math, rounding HALF_UP, float drift, throws, discounted)"
+  integration_tests: "None for actions yet — see TEST-001"
+  e2e_tests: "Deferred per WAIVER-E2E-4.1"
+  ac5_invariant_check: "grep -r 'UPDATE.*commission_entries' apps/web/ → 0 matches ✅"
+
+independentReverification:
+  lint:
+    command: "pnpm --filter @softhair/web lint"
+    result: "✓ No ESLint warnings or errors"
+  typecheck:
+    command: "pnpm --filter @softhair/web typecheck"
+    result: "exit 0"
+  tests:
+    command: "pnpm --filter @softhair/web test"
+    result: "8 files / 63 passed (37 baseline + 26 new) / 0 failed in 39.20s"
+  ac5_grep:
+    command: "Grep pattern='UPDATE.*commission_entries|\\.update.*commission_entries' path=apps/web"
+    result: "No matches found"
+
+epicContext:
+  epic: 4
+  position: "1 of 4 in MVP scope (4.1 → 4.2 → 4.3 → 4.4); 4.5–4.7 NFS-e deferred to Phase 2"
+  closure: "Story 4.1 = engine + UI config + simulator. Story 4.2 will be the first writer to commission_entries via COMPLETED status transition."
+  next_decision: "After @po close-story, @devops *push + apply migration to prod + create PR. Then @sm *draft 4.2 (Commission Calculation on Service Completion)."
+  prod_deploy_sequence: |
+    1. @devops apply migration `20260502000000_story_4_1_professional_service_commissions`
+       to softhair-prod (project_id zqubqygagvtmvvljbstc) — Founder confirmation required
+    2. Verify: list_tables shows new table; SELECT * FROM pg_policies WHERE tablename =
+       'professional_service_commissions' shows the FOR ALL policy
+    3. Merge PR to main (squash)
+    4. Vercel deploys app
+    5. Smoke test on prod: open a TABLE-mode professional's detail page +
+       /configuracoes/comissao
+    6. Schema cache may take ~30s to refresh in PostgREST — retry if 404 on
+       new table
+
+handoff:
+  next_agent: "@po"
+  next_command: "*close-story 4.1"
+  conditions:
+    - "All 6 ACs verified PASS"
+    - "Quality gates re-run independently (lint, typecheck, 63 tests, build)"
+    - "AC5 invariant grep verified (0 matches)"
+    - "DEPLOY-001 sequencing requirement passed to @devops via gate notes"
+    - "DRY-001 + DOC-001 + SECURITY-001 + TEST-001 + TEST-002 + DATA-001 registered as backlog items by @po"
+
+  alternative_handoff:
+    next_agent: "@dev"
+    next_command: "*apply-qa-fixes 4.1"
+    condition: "If @po wants DRY-001 + DOC-001 fixed before merge (~12 minutes total work)"

@@ -563,6 +563,79 @@ export type Database = {
           },
         ]
       }
+      professional_service_commissions: {
+        Row: {
+          created_at: string
+          id: string
+          percent: number
+          professional_id: string
+          salon_id: string
+          service_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          percent: number
+          professional_id: string
+          salon_id: string
+          service_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          percent?: number
+          professional_id?: string
+          salon_id?: string
+          service_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_service_commissions_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_service_commissions_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "public_professionals_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_service_commissions_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "public_salons_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_service_commissions_salon_id_fkey"
+            columns: ["salon_id"]
+            isOneToOne: false
+            referencedRelation: "salons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_service_commissions_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "public_services_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_service_commissions_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       professionals: {
         Row: {
           bio: string | null

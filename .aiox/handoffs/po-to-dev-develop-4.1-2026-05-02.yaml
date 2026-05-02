@@ -1,0 +1,98 @@
+from_agent: po
+to_agent: dev
+last_command: validate-story-draft
+story: "4.1"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.1.commission-rule-engine.md"
+  story_id: "4.1"
+  story_title: "Commission Rule Engine"
+  source_handoff: ".aiox/handoffs/sm-to-po-validate-4.1-2026-05-02.yaml"
+  status_when_handed_off: "Ready"
+
+validation_summary:
+  verdict: GO
+  implementation_readiness_score: 10
+  confidence_level: HIGH
+  ten_point_checklist_score: "10/10 (after flag resolution)"
+  blocking_issues: []
+  should_fix_issues: []
+  nice_to_haves:
+    - "Add E2E smoke spec for simulator (apps/web/e2e/commission-config.spec.ts) — non-blocking, recommended hygiene per HARD.1 baseline"
+    - "Consider adding `data-testid` attributes consistently in matrix UI for future Playwright tests"
+
+flags_resolved_by_po:
+  - id: "FLAG-AC1B-INTERPRETATION"
+    resolution: "Interpretation A APPROVED — new table professional_service_commissions (per-prof × per-service rates). Task 1 is ACTIVE (not conditional). UX caveat added: Task 3.1 must use progressive disclosure + bulk-set helper (mandatory, not optional)."
+    rationale: "Literal reading of 'overrides específicos' = per-professional specificity. Story 1.5 already exposed TABLE radio. Interpretation B would make TABLE mode redundant with PERCENT_FIXED+AC2."
+  - id: "FLAG-AC3-SUM-100"
+    resolution: "SM interpretation APPROVED — % salão is derived (100 - prof_pct); UI displays derivation; CHECK constraint enforces range. No new field, no schema change for AC3."
+    rationale: "x + (100-x) ≡ 100 is a trivial identity. AC3 is presentation-level, not constraint-level."
+  - id: "FLAG-SIMULATOR-LOCATION"
+    resolution: "/configuracoes/comissao APPROVED. /financeiro stays ComingSoon stub for Story 4.4 (financial dashboard). Add navigation link from /configuracoes index."
+    rationale: "Simulator is a config tool (what-if), not a financial reporting view. Categorical separation matches user mental model."
+
+dev_notes_highlights:
+  - "Schema 80% pre-shipped — verify state via `mcp__supabase-project-softhair__list_tables` before touching anything. Story has citations to migration line numbers."
+  - "AC2 (services.commission_override_percent) is 100% implemented in Story 1.6 — DO NOT touch service form. Engine only consumes it via 3-tier precedence."
+  - "AC1(a) PERCENT_FIXED is 50% done in Story 1.5 (radio + default_percent input). Story 4.1 wires it to the engine; doesn't rewrite the form."
+  - "packages/core does NOT exist (architecture.md:86 is aspirational). Real convention: apps/web/lib/{domain}/. Precedent: apps/web/lib/booking/."
+  - "Dead tables (whatsapp_templates, messaging_log, invoices) — DO NOT TOUCH. Phase 2 dormant per change record 2026-04-21."
+
+acceptance_criteria_status_at_handoff:
+  - ac: 1
+    status: "Partially pre-implemented (Story 1.5 PERCENT_FIXED radio + default_percent input). Story 4.1 wires PERCENT_FIXED to engine + implements TABLE mode (new table + UI matrix + bulk helper)."
+  - ac: 2
+    status: "100% pre-implemented (Story 1.6). Engine consumes services.commission_override_percent via precedence rule. No work on service form."
+  - ac: 3
+    status: "Schema CHECK already covers 0-100 range. UI presents `salon = 100 - prof` derivation."
+  - ac: 4
+    status: "Greenfield — implement from scratch in /configuracoes/comissao."
+  - ac: 5
+    status: "Schema designed for it (snapshot fields in commission_entries). Engine MUST insert-only, never UPDATE. Rejection-grade test required."
+  - ac: 6
+    status: "Greenfield tests in apps/web/lib/commission/*.test.ts — 12+ scenarios listed in Task 2.4."
+
+mandatory_quality_gates:
+  pre_commit_dev:
+    - "pnpm lint && pnpm typecheck && pnpm --filter @softhair/web test passes"
+    - "0 regression on 37 existing vitest tests"
+    - "All new vitest scenarios pass (12+ in resolve-rate.test.ts; rounding scenarios in calculate.test.ts)"
+    - "AC5 immutability rejection-grade test passes (story Dev Notes line 235-243)"
+    - "grep -r 'UPDATE.*commission_entries' apps/web/ returns ZERO matches (verifies engine is insert-only)"
+  pre_pr_devops:
+    - "pnpm test:e2e Chromium + Webkit matrix passes (HARD.1 baseline preserved)"
+    - "CodeRabbit review focus: numeric precision, RLS coverage on new table, immutability invariant"
+  pre_deployment:
+    - "N/A — no infra/CI/secrets changes"
+
+prerequisites_for_dev_start:
+  - "Create local branch: feature/4.1-commission-rule-engine (allowed by agent-authority.md for @dev OR @sm; recommend @dev creates at *develop start since SM already finished)"
+  - "@data-engineer applies migration via `mcp__supabase-project-softhair__apply_migration` on softhair-dev (project_id oywizkjldmxhatvftmho) when Task 1 is ready — coordinate via story comments"
+  - "After migration, regenerate types: `mcp__supabase-project-softhair__generate_typescript_types` → `packages/db/types/database.ts`"
+  - "Verify Founder access to /configuracoes route exists (precedent: there are existing config sub-routes)"
+
+execution_mode_recommendation: |
+  Recommend Interactive mode (default) for this story. Reasons:
+    - Multi-file scope (migration + engine + 2 UI surfaces + tests + ADR)
+    - Several decision points already pre-resolved by @po flags but UX/styling judgment remains
+    - Numeric precision is rejection-grade — pause-and-confirm at engine math is healthy
+  YOLO mode is acceptable if @dev signals high confidence; @qa gate will catch issues regardless.
+
+constitutional_compliance:
+  - "Article IV (No Invention): Story content traces to PRD Epic 4 + change record 2026-04-21 + verified schema. ADR-0004 will be created during dev to formalize 3-tier precedence — required by Article IV."
+  - "Authority: @po validated + promoted Draft → Ready (per story-lifecycle.md). @dev now authorized for *develop."
+  - "IDS Article IV-A: G3 advisory complete (no duplicates flagged — engine is greenfield). G4 (Dev Context) will trigger automatically when @dev runs *develop."
+
+next_workflow_step: |
+  @dev runs *develop 4.1:
+    1. Create feature branch feature/4.1-commission-rule-engine
+    2. Status Ready → InProgress
+    3. Execute Tasks 1-6 in order (Task 1 must complete before Task 2 due to types regen dependency)
+    4. After all tasks done + pre-commit gate passes → Status InProgress → InReview
+    5. Coordinate with @data-engineer for migration apply + type regen
+    6. Hand to @qa via *qa-gate or *qa-loop
+
+suggested_command: "*develop 4.1"
