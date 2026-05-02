@@ -85,6 +85,15 @@ Gate: `docs/qa/gates/2.5-client-history.yml` (CONCERNS — deploy-condition reso
 
 ---
 
+## Cross-Epic / Framework Hygiene
+
+| ID | Severity | Priority | Status | Título | Owner |
+|---|---|---|---|---|---|
+| MNT-CONFIG-001 | low | P2 | open | `core-config.yaml#architectureSharded: true` desincronizado com a realidade — architecture é monolítico em `docs/architecture.md`, não há shards em `docs/architecture/` (apenas `ADR-0003-auth-email-password.md`). Também: `devLoadAlwaysFiles` aponta `docs/framework/{coding-standards,tech-stack,source-tree}.md` mas dir contém apenas handoffs Apr-21. **Decisão:** corrigir config OU criar os shards faltantes — não bloqueia stories ativas (River e Pax usam fallback monolítico). Registrado durante validação de HARD.1 (2026-05-01). | @architect |
+| MNT-CONFIG-002 | low | P2 | open | `coderabbit_integration` block ausente em `core-config.yaml` mas dev agent yaml espera `enabled: true` (e stories — Story 2.7, HARD.1 — populam a seção CodeRabbit Integration corretamente). Adicionar bloco explícito ao core-config para alinhar source-of-truth. Registrado durante validação de HARD.1. | @aiox-master |
+
+---
+
 ## Resumo agregado
 
 | Categoria | Abertos | Escalated | Done | Total |
@@ -92,7 +101,7 @@ Gate: `docs/qa/gates/2.5-client-history.yml` (CONCERNS — deploy-condition reso
 | TEST | 8 | 0 | 0 | 8 |
 | PERF | 2 | 1 | 1 | 4 |
 | REQ | 4 | 0 | 0 | 4 |
-| MNT | 3 | 0 | 0 | 3 |
+| MNT | 5 | 0 | 0 | 5 |
 | DOC | 1 | 0 | 0 | 1 |
 | SEC | 0 | 0 | 1 | 1 |
 | DATA | 1 | 0 | 0 | 1 |
@@ -101,7 +110,7 @@ Gate: `docs/qa/gates/2.5-client-history.yml` (CONCERNS — deploy-condition reso
 | TYPES | 1 | 0 | 0 | 1 |
 | VAL | 1 | 0 | 0 | 1 |
 | INFRA | 1 | 0 | 0 | 1 |
-| **Total** | **26** | **1** | **2** | **29** |
+| **Total** | **28** | **1** | **2** | **31** |
 
 ### Itens pareados (setup único resolve múltiplos)
 
@@ -148,3 +157,5 @@ Conjunto coeso pra um sprint único de hardening:
 | 2026-04-25 | Story 2.7 mergeada (PR #26 / `5d601b4`). Cycle limpo (zero hotfix) — primeiras stories desde a 2.4 que se beneficiou de memory acumulada (Zod 4 datetime aplicado preventivamente). 2.4-SEC-001 → done confirmado neste merge (3-layer: web + DB + código). Epic 2 = 6/7 (86%). Próxima e última: 2.5 Client History. | Pax (PO) |
 | 2026-04-29 | Story 2.5 mergeada (PR #28 / `cb76a59`). Cycle multi-agente: Pax (re-validate) → River (SF-001 fix) → Dex (Tasks 1/2/3/5/7) → Dex HALT (schema gap) → Dara (migration `20260427000000` em dev+prod) → Dex resume (Tasks 4/6) → Quinn (gate CONCERNS) → Gage (prod migration ANTES do push, 5/5 CI verde, squash merge). 8 itens novos no backlog (1 P1 medium PERF + 1 P1 medium INFRA com deadline 2026-06-02 + 6 P2 polish). **Epic 2 = 7/7 = 100% done.** | Pax (PO) |
 | 2026-04-29 | **Decisão Founder pós-Epic 2:** promover hardening sprint antes de Epic 3. 7 itens P1/P2 → **P0**: 1.5/1.6/1.7/2.4/2.5-TEST-001 (E2E Playwright cobrindo 5 stories), 1.7-TEST-002 (axe-core par natural), 2.5-INFRA-001 (Node 20 deprecation deadline 2026-06-02). Setup único Playwright + axe-core + workflows update. Próximo passo: @sm draft hardening story (handoff `po-to-sm-hardening-sprint-2026-04-29.yaml`). | Pax (PO) |
+| 2026-05-01 | Story `HARD.1` draftada por River (@sm) — single chunky story consolidando os 7 P0 acima. 7 ACs + 11 Tasks + 6 Risks. ID `HARD.1` (não `2.8`) para preservar Epic 2 = 100% closed status. Próximo passo: @po `*validate-story-draft HARD.1`. | River (SM) |
+| 2026-05-02 | `*validate-story-draft HARD.1` → **GO (10/10)**. Status Draft → Ready. 2 itens novos no backlog (cross-epic): `MNT-CONFIG-001` (architectureSharded desync) + `MNT-CONFIG-002` (coderabbit_integration ausente em core-config). Ambos low/P2, não bloqueiam. Próximo passo: @dev `*develop HARD.1`. | Pax (PO) |
