@@ -1,0 +1,89 @@
+from_agent: pm
+to_agent: sm
+last_command: activate-epic
+story: "4.1"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  trigger: "Founder authorized Path A in @pm *correct-course session 2026-05-02"
+  decision: "Activate Epic 4 (Finance) per existing MVP plan — NO defer reversal needed"
+  source_handoff: ".aiox/handoffs/sm-to-pm-activate-next-epic-2026-05-02.yaml"
+
+active_epic:
+  id: "Epic 4"
+  title: "Finance & Commission (NFS-e deferred to Phase 2)"
+  prd_file: "docs/prd/epic-4-finance-commission-nfs-e.md"
+  goal: |
+    Cálculo automático de comissão + dashboard financeiro com visibilidade real
+    de faturamento/margem. Salão fecha o mês com comissão pronta para pagamento.
+    NFS-e emissão fica em Phase 2.
+  mvp_scope: ["4.1", "4.2", "4.3", "4.4"]
+  deferred_phase_2: ["4.5", "4.6", "4.7"]
+  scope_authority: "docs/change-records/2026-04-21-mvp-scope-reduction.md (Founder approved 2026-04-21)"
+
+first_story:
+  id: "4.1"
+  title: "Commission Rule Engine"
+  prd_section: "docs/prd/epic-4-finance-commission-nfs-e.md (lines 7–18)"
+  user_story: |
+    Como dono do salão, quero configurar regras de comissão flexíveis por
+    profissional, para que o cálculo automático reflita a realidade de
+    contratos diferenciados.
+  acceptance_criteria_summary:
+    - "AC1: Perfil profissional suporta 2 modos — % fixa OU tabela por serviço"
+    - "AC2: Serviço pode ter comissão específica que sobrescreve default do profissional"
+    - "AC3: Validação total (% profissional + % salão) = 100%"
+    - "AC4: Simulador interativo (10 cortes a R$ 50 → cálculo em tempo real)"
+    - "AC5: Alteração de regra NÃO afeta histórico (commissions já calculadas preservadas)"
+    - "AC6: Unit test extenso do engine"
+  story_type: "Feature (engine + UI config)"
+  predicted_complexity: "Medium-High — engine de cálculo + 2 modos + override + histórico imutável"
+  predicted_specialized_agents: ["data-engineer (schema commission_rules + commission_overrides + RLS)", "qa (extensive unit tests for engine math)"]
+
+rationale_for_sm:
+  why_epic_4_now:
+    - "Epic 1 (8/8) + Epic 2 (7/7) = 100% closed"
+    - "HARD.1 hardening merged 2026-05-02 (commit c008e5c)"
+    - "Epic 3 DEFERRED (PMF gate not met — no production design-partner registered)"
+    - "Epic 4 (4.1–4.4) is the natural MVP continuation per change record"
+    - "Founder rationale 2026-04-21: 'Focar o MVP funcional para a etapa de gestão' — Epic 4 IS gestão"
+  why_story_4_1_first:
+    - "Sequential dependency: 4.1 (rule engine) → 4.2 (calc on completion) → 4.3 (monthly report) → 4.4 (dashboard)"
+    - "4.1 is foundational — without rule engine, 4.2 has nothing to apply"
+    - "PRD presents stories in execution order"
+
+prerequisites_for_sm:
+  - "Read PRD Epic 4 in full (especially MVP-only section, skip 4.5–4.7)"
+  - "Verify schema state: confirm `commission_entries` table exists (mentioned in 4.2 AC2) — if not, flag for @data-engineer in Dev Notes"
+  - "Check if `professionals` table has commission config columns (likely needs migration in this story)"
+  - "Run *story-checklist after draft per Phase 1 of SDC"
+  - "CodeRabbit Integration section: predict Database focus (RLS on commission tables) + Backend Logic focus (engine math)"
+
+flags_for_sm:
+  - id: "FLAG-SCHEMA-STATE"
+    desc: |
+      Story 4.2 references `commission_entries` table. Need to confirm whether 4.1
+      should include the migration (probably yes — engine config table + entries table
+      both go in 4.1) or split. Recommend SM checks `packages/db/migrations/` and
+      flags to @data-engineer if ambiguous.
+  - id: "FLAG-DEAD-TABLES-CONTEXT"
+    desc: |
+      Per change record line 122-128, `whatsapp_templates`, `messaging_log`, `invoices`
+      are dead tables (Phase 2 dormant). DO NOT touch them in this story. If migration
+      logic accidentally references them, halt and re-scope.
+  - id: "FLAG-COMMISSION-HISTORY-IMMUTABILITY"
+    desc: |
+      AC5 is a tricky requirement: rule changes preserve historical calculations.
+      Recommend SM design Dev Notes around "snapshot at calc time" pattern (capture
+      rule_id + percentual_aplicado in commission_entries, never re-compute from
+      current rule). This is the kind of subtle invariant worth explicit dev notes.
+
+constitutional_compliance:
+  - "Article IV (No Invention): All scope traces to PRD Epic 4 + change record 2026-04-21 ✅"
+  - "Authority: @pm activated epic ✅; @sm now authorized to *draft 4.1"
+  - "IDS Article IV-A (Incremental Dev): SM should query registry for existing commission patterns before drafting (likely none — this is greenfield engine). G2 advisory only, non-blocking."
+
+next_workflow_step: "@sm executes *draft 4.1"
+
+suggested_command: "*draft 4.1"

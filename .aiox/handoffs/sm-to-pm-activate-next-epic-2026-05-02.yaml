@@ -1,0 +1,90 @@
+from_agent: sm
+to_agent: pm
+last_command: activate-next-epic
+story: null
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  trigger: "Founder requested SM to draft Epic 3 in fresh session. SM blocked on two fronts and escalated."
+  sprint_state:
+    epic_1: "100% closed (8/8 stories 1.1–1.8)"
+    epic_2: "100% closed (7/7 stories 2.1–2.7)"
+    hardening: "HARD.1 merged 2026-05-02 (commit c008e5c) — Playwright E2E + axe-core + Node 24"
+    branch: "main, clean working tree"
+    active_work: "none — sprint at inflection point"
+
+decision_needed: |
+  Founder asked to activate next epic. Epic 3 (WhatsApp Automation) is the obvious
+  next-in-sequence BUT it's formally DEFERRED to Phase 2 per change record
+  `docs/change-records/2026-04-21-mvp-scope-reduction.md`. Defer rationale was
+  "wait until PMF validated with design-partners". @pm needs to decide:
+
+  1. Has the PMF gate been met? (revert Epic 3 defer)
+  2. Or skip to Epic 4 (Finance/Commission/NFS-e)?
+  3. Or skip to Epic 5 (Growth Loop / C2C Indication)?
+  4. Or define a new epic if scenario shifted?
+
+epic_options_inventory:
+  - id: "Epic 3"
+    title: "WhatsApp Messaging Automation"
+    file: "docs/prd/epic-3-whatsapp-messaging-automation.md"
+    status: "DEFERRED to Phase 2 (2026-04-21)"
+    stories_defined: 7
+    stories: ["3.1 Chatwoot Setup", "3.2 WhatsApp BSP Integration", "3.3 Template Mgmt + Meta Approval", "3.4 24h Auto-Confirmation", "3.5 2h Auto-Reminder", "3.6 Response Handling", "3.7 Cost Monitoring"]
+    activation_blocker: "Defer rationale must be re-validated (PMF with design-partners)"
+    risk_profile: "High — Meta approval SLA + BSP cost + infra (Chatwoot self-hosted)"
+    value_profile: "High — direct no-show reduction, recepção time savings"
+
+  - id: "Epic 4"
+    title: "Finance / Commission / NFS-e"
+    file: "docs/prd/epic-4-finance-commission-nfs-e.md"
+    status: "Not yet started, no defer flag"
+    activation_blocker: "Unknown — @pm to read PRD and confirm"
+    risk_profile: "High — NFS-e municipal integration is fiscal/legal heavy"
+    value_profile: "High — directly hits salon owner pain (commission calc + tax compliance)"
+
+  - id: "Epic 5"
+    title: "Growth Loop — Indicação C2C"
+    file: "docs/prd/epic-5-growth-loop-indicao-c2c.md"
+    status: "Not yet started, no defer flag"
+    activation_blocker: "Likely needs active client base (premature without traction)"
+    risk_profile: "Low-Medium — feature work, no external integrations"
+    value_profile: "Medium — viral growth lever, but only meaningful with users"
+
+  - id: "MNT/HARD follow-ups"
+    title: "Maintenance + Hardening backlog (alternative to new epic)"
+    note: "From memory: MNT-DEVOPS-001, MNT-A11Y-001, HARD.1-FU-001 (ETA 2026-05-09), HARD.1-FU-002 are queued. If @pm decides next epic isn't ready, sm can pick these up first."
+
+constitutional_check:
+  - "Article IV (No Invention): @pm's epic choice MUST trace to PRD or change record. If reverting Epic 3 defer, NEW change record required (e.g., `2026-05-02-epic-3-reactivation.md`) citing PMF evidence."
+  - "Authority: @pm exclusive on `*create-epic` / activation decisions. SM cannot draft stories until @pm confirms active epic."
+
+founder_signals_to_check:
+  - "Has any design-partner contract / commitment surfaced WhatsApp as blocker?"
+  - "Has revenue/commission tracking been requested explicitly by current users?"
+  - "Is there a deadline (sales pitch, demo, partnership) that pins the choice?"
+  - "Founder velocity preference (per memory): if signals strong, propose Path A vs B and let Founder choose — don't assume."
+
+suggested_pm_workflow:
+  - step: 1
+    action: "Read change record `docs/change-records/2026-04-21-mvp-scope-reduction.md`"
+    purpose: "Understand original defer rationale before evaluating reversal"
+  - step: 2
+    action: "Skim Epic 4 + Epic 5 PRDs for activation readiness"
+    purpose: "Compare alternatives objectively"
+  - step: 3
+    action: "Ask Founder direct questions about PMF state + design-partner signals"
+    purpose: "Cannot decide without product-side input"
+  - step: 4
+    action: "If reverting Epic 3 defer → write new change record + remove DEFERRED flag from `docs/prd/epic-3-whatsapp-messaging-automation.md` line 3"
+    purpose: "Constitutional traceability"
+  - step: 5
+    action: "Handoff back to @sm with active epic decided → sm runs *draft on story 1"
+    purpose: "Resume Story Development Cycle"
+
+handoff_back_to_sm:
+  expected_artifact: ".aiox/handoffs/pm-to-sm-epic-{N}-active-2026-05-XX.yaml"
+  expected_fields: ["active_epic_id", "first_story_id", "rationale", "change_record_path (if Epic 3)"]
+
+suggested_command: "*correct-course OR direct conversation with Founder on epic activation"

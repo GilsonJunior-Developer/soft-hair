@@ -229,3 +229,145 @@ export async function softDeleteProfessional(
   return { ok: true };
 }
 
+/* ----------------------------------------------------------
+ * Commission table entries — Story 4.1 AC1(b)
+ * ----------------------------------------------------------*/
+
+const percentSchema = z
+  .number()
+  .min(0, 'Deve ser entre 0 e 100')
+  .max(100, 'Deve ser entre 0 e 100');
+
+/**
+ * Sets (or clears) a commission override for a (professional, service) pair.
+ * percent=null → delete entry (falls back to service override or default per ADR-0004).
+ * percent=number → upsert entry.
+ */
+export async function setCommissionTableEntry(
+  professionalId: string,
+  serviceId: string,
+  percent: number | null,
+): Promise<ActionResult> {
+  const salonId = await getCurrentSalonId();
+  if (!salonId) {
+    return { ok: false, error: 'Salão não encontrado' };
+  }
+
+  const supabase = await createClient();
+
+  if (percent === null) {
+    const { error } = await supabase
+      .from('professional_service_commissions')
+      .delete()
+      .eq('professional_id', professionalId)
+      .eq('service_id', serviceId);
+
+    if (error) {
+      console.error('[setCommissionTableEntry] delete:', error.message);
+      return { ok: false, error: 'Erro ao remover regra' };
+    }
+  } else {
+    const parsed = percentSchema.safeParse(percent);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? 'Valor inválido' };
+    }
+
+    const { error } = await supabase
+      .from('professional_service_commissions')
+      .upsert(
+        {
+          salon_id: salonId,
+          professional_id: professionalId,
+          service_id: serviceId,
+          percent: parsed.data,
+        },
+        { onConflict: 'professional_id,service_id' },
+      );
+
+    if (error) {
+      console.error('[setCommissionTableEntry] upsert:', error.message);
+      return { ok: false, error: 'Erro ao salvar regra' };
+    }
+  }
+
+  revalidatePath(`/profissionais/${professionalId}`);
+  return { ok: true };
+}
+
+/**
+ * Bulk-sets a commission percent for ALL services of a professional.
+ * onlyEmpty=true → only inserts where no entry exists (safe default for "Aplicar X% a todos").
+ * onlyEmpty=false → upserts everywhere (use only after explicit owner confirmation).
+ */
+export async function bulkSetProfessionalServiceCommissions(
+  professionalId: string,
+  percent: number,
+  options: { onlyEmpty: boolean } = { onlyEmpty: true },
+): Promise<ActionResult<{ inserted: number; updated: number }>> {
+  const parsed = percentSchema.safeParse(percent);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Valor inválido' };
+  }
+
+  const salonId = await getCurrentSalonId();
+  if (!salonId) {
+    return { ok: false, error: 'Salão não encontrado' };
+  }
+
+  const supabase = await createClient();
+
+  // Fetch active services for this salon
+  const { data: services, error: svcErr } = await supabase
+    .from('services')
+    .select('id')
+    .eq('salon_id', salonId)
+    .eq('is_active', true)
+    .is('deleted_at', null);
+
+  if (svcErr || !services) {
+    console.error('[bulkSetCommissions] services fetch:', svcErr?.message);
+    return { ok: false, error: 'Erro ao listar serviços' };
+  }
+
+  if (services.length === 0) {
+    return { ok: true, data: { inserted: 0, updated: 0 } };
+  }
+
+  // If onlyEmpty, fetch existing entries to skip them
+  let serviceIdsToTouch: string[] = services.map((s) => s.id);
+  if (options.onlyEmpty) {
+    const { data: existing } = await supabase
+      .from('professional_service_commissions')
+      .select('service_id')
+      .eq('professional_id', professionalId);
+
+    const existingIds = new Set((existing ?? []).map((e) => e.service_id));
+    serviceIdsToTouch = serviceIdsToTouch.filter((id) => !existingIds.has(id));
+  }
+
+  if (serviceIdsToTouch.length === 0) {
+    return { ok: true, data: { inserted: 0, updated: 0 } };
+  }
+
+  const rows = serviceIdsToTouch.map((service_id) => ({
+    salon_id: salonId,
+    professional_id: professionalId,
+    service_id,
+    percent: parsed.data,
+  }));
+
+  const { error: upsertErr } = await supabase
+    .from('professional_service_commissions')
+    .upsert(rows, { onConflict: 'professional_id,service_id' });
+
+  if (upsertErr) {
+    console.error('[bulkSetCommissions] upsert:', upsertErr.message);
+    return { ok: false, error: 'Erro ao aplicar regras em massa' };
+  }
+
+  revalidatePath(`/profissionais/${professionalId}`);
+  return options.onlyEmpty
+    ? { ok: true, data: { inserted: rows.length, updated: 0 } }
+    : { ok: true, data: { inserted: 0, updated: rows.length } };
+}
+

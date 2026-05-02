@@ -1,0 +1,156 @@
+from_agent: dev
+to_agent: qa
+last_command: develop
+story: "4.1"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: false
+
+context:
+  story_file: "docs/stories/4.1.commission-rule-engine.md"
+  story_id: "4.1"
+  story_title: "Commission Rule Engine"
+  source_handoff: ".aiox/handoffs/po-to-dev-develop-4.1-2026-05-02.yaml"
+  status_when_handed_off: "Ready for Review"
+  branch: "feature/4.1-commission-rule-engine"
+  base: "main@c008e5c"
+  execution_mode: "YOLO"
+  decision_log: ".ai/decision-log-4.1.md"
+
+implementation_summary: |
+  All 6 tasks completed in single YOLO session. New table
+  `professional_service_commissions` applied to softhair-dev (success). Engine
+  in apps/web/lib/commission/ (3 source files + 2 test files, 26 unit tests).
+  UI: progressive-disclosure matrix in /profissionais/[id] (TABLE mode only)
+  + standalone simulator at /configuracoes/comissao. Server Actions in
+  profissionais/actions.ts. ADR-0004 documents 3-tier precedence + immutability
+  invariant. Types regenerated via MCP.
+
+acceptance_criteria_self_assessment:
+  - ac: 1
+    status: PASS
+    evidence: |
+      Mode PERCENT_FIXED already shipped Story 1.5 (radio + default_percent).
+      Mode TABLE now backed by professional_service_commissions table + UI
+      matrix. Both modes resolved by resolveRate() in apps/web/lib/commission/.
+      Test coverage: 12 vitest scenarios covering all permutations.
+  - ac: 2
+    status: PASS_PRE_EXISTING
+    evidence: |
+      services.commission_override_percent + service-form persistence shipped
+      Story 1.6. Engine consumes it in tier 2 of precedence rule (resolveRate
+      line 36). resolve-rate.test.ts:33-41 covers PERCENT_FIXED+override path;
+      :60-72 covers TABLE-fallback-to-override path.
+  - ac: 3
+    status: PASS
+    evidence: |
+      UI shows salon share derived as `100 - prof_pct` in real-time (commission
+      -table-panel.tsx:269 + simulator). Schema CHECK (5,2 + BETWEEN 0 AND 100)
+      enforces range. No salon_percent stored field needed.
+  - ac: 4
+    status: PASS
+    evidence: |
+      apps/web/app/(dashboard)/configuracoes/comissao/commission-simulator.tsx
+      renders dropdowns + qty + price inputs; useMemo recomputes resolveRate +
+      calculateCommission on input change; output text matches PRD example
+      format. Source label badge ("tabela do profissional" | "override do
+      serviço" | "default do profissional") shown for transparency.
+  - ac: 5
+    status: PASS_INVARIANT_HELD
+    evidence: |
+      Engine code is pure (apps/web/lib/commission/) — does not import any
+      Supabase client. Server Actions in profissionais/actions.ts only
+      reference professional_service_commissions (new table), never
+      commission_entries. Verified structurally: `grep -r 'UPDATE.*commission_
+      entries' apps/web/` returns ZERO matches. Story 4.2 will be the first
+      writer to commission_entries.
+  - ac: 6
+    status: PASS
+    evidence: |
+      26 vitest tests in apps/web/lib/commission/{resolve-rate,calculate}.test.ts.
+      Coverage: precedence (3 tiers + 2 fallbacks), boundaries (0%, 100%),
+      meaningful-zero distinction (entry=0 vs null), defensive (mode mismatch),
+      math (PRD example, simple, zero, 100%, large numbers), rounding HALF_UP
+      (33.33%×R$10=3.33, 33.33%×R$9.97=3.32, 0.5-cent boundary), float drift
+      avoidance (0.1×30%=0.03 exact), input validation throws (negative price,
+      percent out of range), discounted-price contract.
+
+quality_gates_executed:
+  lint:
+    command: "pnpm --filter @softhair/web lint"
+    result: "✓ No ESLint warnings or errors"
+  typecheck:
+    command: "pnpm --filter @softhair/web typecheck"
+    result: "exit 0 (no errors)"
+  unit_tests:
+    command: "pnpm --filter @softhair/web test"
+    result: "8 files | 63 passed (37 baseline + 26 new) | 0 failed"
+    duration: "16.31s"
+  build:
+    command: "pnpm --filter @softhair/web build"
+    result: "exit 0 — all routes compiled including /configuracoes/comissao (2.05 kB) and /profissionais/[id] (3.1 kB)"
+  coderabbit_cli:
+    skipped: true
+    reason: "Founder dev machine has no WSL (precedent: HARD.1, 2.5, 2.7 also merged without CLI). GitHub App PR review will run on push. Tracked in MNT-DEVOPS-001."
+  ac5_immutability_grep:
+    command: "grep -r 'UPDATE.*commission_entries' apps/web/"
+    result: "0 matches"
+
+migration_state:
+  applied_to: "softhair-dev (project_id oywizkjldmxhatvftmho)"
+  applied_via: "mcp__supabase-project-softhair__apply_migration"
+  applied_by: "@dev (per Founder YOLO authorization, decision D-001)"
+  prod_status: "NOT applied (will require @data-engineer with Founder confirmation per memory reference_supabase_mcp_autonomy.md)"
+  rollback_path: "packages/db/rollback/20260502000000_story_4_1_rollback.sql"
+
+risks_for_qa_to_assess:
+  - id: "QA-RISK-1"
+    severity: low
+    desc: |
+      Migration applied to softhair-dev only. softhair-prod will be applied
+      separately at deploy time. QA should verify the migration SQL is
+      idempotent (uses IF NOT EXISTS) and the rollback SQL is correct before
+      pushing to prod.
+  - id: "QA-RISK-2"
+    severity: low
+    desc: |
+      AC5 is structurally enforced (engine doesn't write to commission_entries).
+      The rejection-grade integration test described in story Dev Notes lines
+      235-243 is more relevant for Story 4.2 (where the actual insert happens).
+      QA may want to add an explicit DB-level test in 4.2 that updates a rule
+      and asserts existing commission_entries unchanged.
+  - id: "QA-RISK-3"
+    severity: low
+    desc: |
+      UI matrix tested via vitest unit (logic) but NOT via Playwright E2E. HARD.1
+      established the E2E baseline; story Dev Notes mark E2E as "non-blocking,
+      recommended hygiene". QA may waive or request follow-up. Bulk helper +
+      progressive disclosure are well-defined contracts and could be added as
+      backlog item rather than blocker.
+  - id: "QA-RISK-4"
+    severity: low
+    desc: |
+      RLS policy on professional_service_commissions uses FOR ALL (paridade
+      com professionals_all/services_all). PROFESSIONAL role members have
+      write access via RLS — convention from Story 1.1 leaves role gating to
+      app layer. Story 4.1 doesn't enforce role at app layer either (any
+      logged-in salon member can call the Server Actions). If stricter gating
+      is required, that's a backlog item (likely OBS or VAL category) — not
+      a blocker for this story since it matches existing convention.
+
+what_was_NOT_done:
+  - "git push — blocked by agent-authority.md, delegated to @devops"
+  - "PR creation — same"
+  - "Apply migration to softhair-prod — requires @data-engineer + Founder confirmation"
+  - "E2E Playwright spec for simulator/matrix — story marks as non-blocking; can be follow-up"
+  - "Manual QA dry-run with seed data in browser — Founder/QA territory; dev machine doesn't have a running dev server tied to softhair-dev"
+
+suggested_qa_workflow:
+  - "Read story 4.1 (now Status=Ready for Review)"
+  - "Run *qa-gate 4.1 with 7-check QA checklist (story-lifecycle.md)"
+  - "Verify: code review (engine math, RLS, types), unit tests pass (already ✅), AC coverage (above), no regressions (already ✅), performance (engine is O(1), no DB roundtrips), security (RLS coverage), docs (ADR-0004 + README updated)"
+  - "Decision: PASS / CONCERNS / FAIL / WAIVED"
+  - "If PASS → handoff to @devops *push for branch + PR"
+  - "If CONCERNS → document; can still push with notes"
+  - "If FAIL → return to @dev *apply-qa-fixes"
+
+suggested_command: "*qa-gate 4.1"

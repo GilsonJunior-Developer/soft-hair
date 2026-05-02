@@ -1,12 +1,24 @@
 # packages/db — SoftHair Database
 
 **Stack:** Supabase (Postgres 15) + RLS multi-tenant
-**Versão:** v0.2.1 (Story 1.2 applied; scope change 2026-04-21)
+**Versão:** v0.3.0 (Story 4.1 applied 2026-05-02)
 **Owner:** @data-engineer (Dara)
 
 Estado de banco do SoftHair — migrations, RLS, types TypeScript gerados, smoke tests.
 
 > ⚠️ **SCOPE CHANGE 2026-04-21:** Tables `whatsapp_templates`, `messaging_log`, `invoices` e o seed de WA templates são **dormant até Phase 2** (WhatsApp + NFS-e saíram do MVP). Schema preservado sem cost/harm. Ver [change record](../../docs/change-records/2026-04-21-mvp-scope-reduction.md).
+
+## Commission tables (Story 4.1)
+
+- **`commission_entries`** (Story 1.1) — append-only ledger of commissions per
+  COMPLETED appointment. Snapshot pattern: `percent_applied` and
+  `commission_amount_brl` are captured at calculation time, never derived.
+  AC5 immutability invariant: engine NEVER UPDATEs this table during rule
+  edits.
+- **`professional_service_commissions`** (Story 4.1) — per-professional ×
+  per-service rate matrix. Active only when `professionals.commission_mode =
+  'TABLE'`. Three-tier precedence rule documented in
+  [`docs/architecture/decisions/0004-commission-rule-resolution.md`](../../docs/architecture/decisions/0004-commission-rule-resolution.md).
 
 ---
 
