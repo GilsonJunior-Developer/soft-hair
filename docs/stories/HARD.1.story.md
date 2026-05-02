@@ -2,9 +2,9 @@
 
 ## Status
 
-Ready for Review
+Done
 
-> ✅ **Phase 2 (parallel-safe scope) shipped 2026-05-02 via YOLO mode.** Tasks 1, 2.1, 2.2, 2.3, 2.4, 2.5, 3, 4, 5, 6, 7, 8, 9, 10 all complete. Task 11 partial: 11.2 + 11.5 done; 11.1/11.3/11.4 await @devops push + CI verde. Real bugs surfaced during execution: GoTrue panic on NULL token fields (gotcha documentado), `MNT-A11Y-001` (CRITICAL select-name violation em /servicos). Both fixed/tracked.
+> ✅ **Story closed 2026-05-02 via @po `*close-story` after CI 7/7 verde.** All Tasks 1-11 complete (Task 11.1/11.3/11.4 fechadas pelo close-story workflow). Phase 1 + Phase 2 ambas shipped. PR #30 aguardando squash merge por @devops. Decisions PO documentados em `devops-to-po-close-HARD.1-2026-05-02` handoff: Path B (skip @qa review) autorizado pelo Founder dado strength dos signals + precedente Stories 2.5/2.7.
 
 ## Executor Assignment
 
@@ -165,12 +165,12 @@ quality_gate_tools: [coderabbit, playwright, axe-core, lighthouse]
   - [x] 10.1 `docs/testing/e2e.md` criado com TL;DR, Stack, Repository layout, Conventions (5 non-negotiables incluindo `data-testid` + zero `waitForTimeout` + `domcontentloaded` over `load` + axe-on-every-spec + test isolation), Debugging flaky, CI integration, Seed data placeholder, Local environment, Relationship to other gates, Adding-a-new-spec checklist, Known gotchas, Future work
   - [x] 10.2 Link adicionado ao `README.md` (Scripts table) + `docs/architecture.md` (callout box após Tech Stack table, antes de Data Models)
 
-- [x] **Task 11: Smoke run + ajuste timing/retry (AC: 6)** — partial; CI validation pending @devops push
-  - [ ] 11.1 ⏳ aguarda push @devops — local validation: smoke 6/6 + self-booking 2/2 passaram; auth-gated specs flaky LOCAL (next dev mode), expected DETERMINISTIC em CI (next build && next start). `continue-on-error: true` no e2e job é a salvaguarda agreed para o primeiro merge
-  - [x] 11.2 Ajustes aplicados: `navigationTimeout: 30s → 60s` (Webkit + dev compile lentos); deep flows que exigem fixture mocking sofisticado movidos para `test.fixme()` com TODO references nos próprios specs (não usei `retries: 5+`)
-  - [ ] 11.3 ⏳ aguarda CI run pra confirmar artifacts uploaded
-  - [ ] 11.4 ⏳ Backlog `done` updates conditional em CI verde — vou marcar quando @devops confirmar PR #30 atualizado verde
-  - [x] 11.5 Story Status: InProgress → Ready for Review (próximo passo: @devops `*push` para atualizar PR #30 com Phase 2 commits)
+- [x] **Task 11: Smoke run em CI + backlog updates + story status (AC: 6)** — fechado 2026-05-02 pelo @po close-story
+  - [x] 11.1 ✅ CI run 25254859788: 7/7 jobs verde (Detect 7s + Lint-Test-Build 1m23s + E2E chromium 1m49s + E2E webkit 2m2s + Lighthouse 4m5s + Vercel deployed + Vercel Preview Comments). Zero failures masked pelo `continue-on-error: true` (verificado via gh run logs)
+  - [x] 11.2 Ajustes aplicados Phase 2: `navigationTimeout: 30s → 60s` (Webkit + dev compile lentos); deep flows movidos para `test.fixme()` com TODO references; não usei `retries: 5+`. CI confirma deterministic em prod build.
+  - [x] 11.3 ✅ Artifacts uploaded — `playwright-report-chromium` (247.5 KB) + `playwright-report-webkit` (247.7 KB), 7d retention. `test-results-*` não uploaded (gate `if: failure()` + zero failures)
+  - [x] 11.4 ✅ `docs/qa/backlog.md` atualizado pelo @po close-story: 7 P0 items marcados como `done` (1.5-TEST-001 + 1.6-TEST-001 + 1.7-TEST-001 + 1.7-TEST-002 + 2.4-TEST-001 + 2.5-TEST-001 + 2.5-INFRA-001)
+  - [x] 11.5 Story Status: Ready for Review → **Done** (close-story workflow). Próximo passo: @devops `gh pr merge 30 --squash` (handoff `po-to-devops-merge-HARD.1-2026-05-02` será emitido)
 
 ## Dev Notes
 
@@ -457,6 +457,8 @@ _(a listar se houver — escopo OUT-OF-SCOPE definido pelo handoff)_:
 | 2026-05-01 | 1.1 | `*validate-story-draft` GO (10/10) — Status Draft → Ready. Decisões PO: (a) FLAG-NUMBERING resolvido APROVANDO `HARD.1` como cross-epic track; (b) FLAG-CONFIG-DRIFT (architectureSharded desync) registrado como item separado `MNT-CONFIG-001` no backlog, não bloqueia esta story. Ver `docs/qa/po-validation-HARD.1-2026-05-01.md` para report completo. | Pax (@po) |
 | 2026-05-02 | 1.2 | `*develop` Phase 1 of 2 (parallel-safe scope) shipped. Status Ready → InProgress. Tasks 1, 2.3, 2.4, 2.5, 8, 9, 10 done. Tasks 2.1, 2.2, 3-7, 11 paused on `PREREQ-TEST-USER` (Founder) + `PREREQ-SUPABASE-SERVICE-ROLE` (@devops). Quality gates: lint ✅ / typecheck ✅ / vitest 37/37 (no regression) ✅ / build ✅ / smoke E2E 6/6 ✅. Action versions upgraded beyond handoff (v6/v7 instead of v5/v4 — story Task 9.1 anticipated drift). Added `apps/web/e2e/smoke.spec.ts` canary spec beyond original scope to validate pipeline end-to-end. CodeRabbit self-healing deferred to Phase 2 close. | Dex (@dev) |
 | 2026-05-02 | 1.3 | `*develop HARD.1 yolo` Phase 2 shipped. Status InProgress → Ready for Review. Tasks 2.1 (auth fixture + login-form data-testids), 2.2 (seed fixture w/ Service Role), 3 (professional-crud spec + page/form data-testids), 4 (service-crud spec), 5 (dashboard-hoje spec), 6 (self-booking spec public-route), 7 (clients spec), 11.2/11.5 done. Real bugs surfaced + tracked: GoTrue panic em NULL token fields (gotcha + fix em docs); `MNT-A11Y-001` (CRITICAL select-name em /servicos). Added 2 GH secrets (NEXT_PUBLIC_SUPABASE_URL + ANON_KEY) + ci.yml e2e env block. Quality gates local: lint ✅ / typecheck ✅ / vitest 37/37 ✅ / smoke 6/6 + self-booking 2/2 ✅ / auth-gated specs flaky LOCAL (dev mode) but expected DETERMINISTIC em CI (prod build). 14 active tests + 14 fixme (28 total). Tasks 11.1/11.3/11.4 aguardam @devops push + CI verde. | Dex (@dev) |
+| 2026-05-02 | 1.4 | @devops `*push` Phase 2 (single commit `553cce0`) → PR #30 atualizado. CI run 25254859788: **7/7 jobs verde primeira tentativa**. E2E chromium 9 passed (1m49s) + webkit 9 passed (2m2s) — zero failures mascaradas pelo `continue-on-error: true`. Artifacts uploaded. | Gage (@devops) |
+| 2026-05-02 | 1.5 | `*close-story HARD.1` executado por @po. Path B autorizado pelo Founder (skip @qa review dado strength dos signals + precedente Stories 2.5/2.7). Status Ready for Review → **Done**. Tasks 11.1/11.3/11.4 fechadas. 7 P0 items no backlog marcados como `done`. Próximo passo: @devops `gh pr merge 30 --squash`. | Pax (@po) |
 
 ## QA Results
 
