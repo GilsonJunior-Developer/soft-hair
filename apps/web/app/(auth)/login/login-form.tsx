@@ -41,6 +41,7 @@ export function LoginForm() {
           placeholder="voce@salao.com.br"
           aria-invalid={emailError ? true : undefined}
           aria-describedby={emailError ? 'email-error' : undefined}
+          data-testid="login-email"
         />
         {emailError && (
           <p
@@ -74,6 +75,7 @@ export function LoginForm() {
           placeholder="Sua senha"
           aria-invalid={passwordError ? true : undefined}
           aria-describedby={passwordError ? 'password-error' : undefined}
+          data-testid="login-password"
         />
         {passwordError && (
           <p
@@ -90,6 +92,7 @@ export function LoginForm() {
       {genericError && (
         <div
           role="alert"
+          data-testid="login-error"
           className="rounded-[var(--radius-md)] p-3 text-sm"
           style={{
             backgroundColor: 'var(--color-error-bg)',
@@ -100,7 +103,7 @@ export function LoginForm() {
         </div>
       )}
 
-      <Button type="submit" size="lg" disabled={isPending}>
+      <Button type="submit" size="lg" disabled={isPending} data-testid="login-submit">
         {isPending ? 'Entrando...' : 'Entrar'}
       </Button>
 

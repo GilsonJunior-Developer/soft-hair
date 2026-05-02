@@ -151,6 +151,7 @@ export function ProfessionalForm({
         <Label htmlFor="name">Nome *</Label>
         <Input
           id="name"
+          data-testid="prof-form-name"
           value={name}
           onChange={(e) => handleNameChange(e.target.value)}
           required
@@ -168,6 +169,7 @@ export function ProfessionalForm({
         <Label htmlFor="slug">Identificador público *</Label>
         <Input
           id="slug"
+          data-testid="prof-form-slug"
           value={slug}
           onChange={(e) => {
             setSlugManuallyEdited(true);
@@ -345,6 +347,7 @@ export function ProfessionalForm({
           </Label>
           <Input
             id="commission_pct"
+            data-testid="prof-form-commission-pct"
             type="number"
             min={0}
             max={100}
@@ -383,10 +386,11 @@ export function ProfessionalForm({
           variant="ghost"
           onClick={() => router.push('/profissionais')}
           disabled={isPending}
+          data-testid="prof-form-cancel"
         >
           Cancelar
         </Button>
-        <Button type="submit" size="lg" disabled={isPending}>
+        <Button type="submit" size="lg" disabled={isPending} data-testid="prof-form-submit">
           {isPending
             ? 'Salvando...'
             : mode === 'create'

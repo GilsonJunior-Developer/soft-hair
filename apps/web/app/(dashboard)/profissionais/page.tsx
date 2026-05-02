@@ -54,7 +54,9 @@ export default async function ProfissionaisPage() {
           </p>
         </div>
         <Link href="/profissionais/novo">
-          <Button type="button">+ Adicionar</Button>
+          <Button type="button" data-testid="professionals-add-cta">
+            + Adicionar
+          </Button>
         </Link>
       </header>
 
@@ -100,6 +102,9 @@ export default async function ProfissionaisPage() {
             return (
               <li
                 key={p.id}
+                data-testid="professional-card"
+                data-prof-id={p.id}
+                data-prof-slug={p.slug}
                 className="flex items-center gap-3 rounded-[var(--radius-lg)] border p-4"
                 style={{
                   borderColor: 'var(--color-border)',

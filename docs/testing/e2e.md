@@ -187,17 +187,200 @@ Reports are HTML — download the zip, `unzip`, and open `index.html`.
 
 ---
 
-## Seed data + test user (placeholder)
+## Seed data + test user
 
-> **Currently blocked on PREREQ-TEST-USER and PREREQ-SUPABASE-SERVICE-ROLE.** This section becomes load-bearing once Tasks 2.1 + 2.2 of `HARD.1` land.
+> **Status:** ✅ Test user e fixture mínima existem em `softhair-dev` desde 2026-05-02 (Dara via MCP). Phase 2 fixtures (`auth.ts` / `seed.ts`) podem usar os IDs e credenciais documentados abaixo.
 
-The plan:
+### Credenciais do test user (softhair-dev only)
 
-- Dedicated test user `e2e+test@softhair.com` in `softhair-dev` with one minimal salon: 3 services, 2 professionals, 3 clients pre-seeded.
-- `seed` fixture uses `SUPABASE_SERVICE_ROLE_KEY` (server-side only) to insert per-spec rows that bypass RLS, then cleans them in `afterEach`/`afterAll`.
-- Auth fixture logs the test user in via Supabase OTP (mocked OTP code in dev) and stores the session cookie on the Playwright browser context.
+| Campo | Valor |
+|---|---|
+| Email | `e2e+test@softhair.com` |
+| Senha | `e2e-test-pwd-2026` |
+| `auth.users.id` | `a01c0eda-4938-45fc-afbf-15a12fdd02b4` |
+| `public.users.name` | `E2E Test Salon Owner` |
+| `default_salon_id` | `4e5b99ca-2fc0-46cd-a634-ef8e5b84a1b7` |
 
-Until then, specs that need login or seeded data should call `test.fixme()` with a link to the unblocking work, not skip silently.
+⚠️ **NUNCA aplicar este seed em `softhair-prod`.** O SQL abaixo está intencionalmente fora de `supabase/migrations/` e fora de `supabase/seed.sql` para zerar o risco de execução acidental em prod via migration runner.
+
+### Fixture mínima criada
+
+| Recurso | Quantidade | Detalhes |
+|---|---|---|
+| `salons` | 1 | nome `Salão E2E`, slug `salao-e2e`, city `São Paulo`, cnpj `00000000000000` (test marker), `subscription_status='TRIAL'`, `cancel_window_hours=24` (default) |
+| `salon_members` | 1 | role `OWNER` linkado ao test user |
+| `professionals` | 2 | `profissional-1` (50% commission, specs: corte+barba), `profissional-2` (60% commission, specs: coloração+escova), working_hours default seg-sab 09-18 |
+| `services` | 3 | Corte Masculino (30 min, R$ 50, 50%), Coloração (90 min, R$ 150, 60%), Escova (45 min, R$ 70, 50%) — todos category `cabelo` |
+| `clients` | 3 | phones `+5511999000001/2/3`, emails `cliente1/2/3@e2e.softhair.com`, LGPD consent já dado |
+
+### Como recriar manualmente (caso o dev DB seja resetado)
+
+Pré-requisitos:
+- Acesso ao project `softhair-dev` (project_id `oywizkjldmxhatvftmho`) via MCP `supabase-project-softhair` ou `psql` com service_role
+- Extensions `pgcrypto`, `citext`, `btree_gist` enabled (são por padrão em Supabase)
+
+Cole o bloco abaixo em uma tool com privilégio de service_role (MCP `execute_sql` da Dara, Supabase Studio SQL editor, ou `psql` direto). O bloco é **idempotente** — se o user já existir, retorna `NOTICE` e aborta sem erro.
+
+```sql
+DO $$
+DECLARE
+  v_user_id UUID;
+  v_salon_id UUID;
+  v_existing_email TEXT;
+BEGIN
+  -- Idempotency guard
+  SELECT email INTO v_existing_email FROM auth.users WHERE email = 'e2e+test@softhair.com';
+  IF v_existing_email IS NOT NULL THEN
+    RAISE NOTICE 'Test user já existe — aborting (drop manually se quiser recriar)';
+    RETURN;
+  END IF;
+
+  -- 1. auth.users (trigger handle_new_auth_user vai popular public.users)
+  -- IMPORTANT: confirmation_token + recovery_token + email_change* + reauthentication_token
+  -- MUST be empty strings (not NULL). GoTrue's Go scanner cannot convert NULL to
+  -- string and rejects login with "Database error querying schema" 500 if NULL.
+  -- Also: bcrypt cost MUST be 10 (`gen_salt('bf', 10)`) to match GoTrue's hash
+  -- expectations; default `gen_salt('bf')` is cost 6 and will produce a hash
+  -- GoTrue rejects as "Email ou senha incorretos".
+  INSERT INTO auth.users (
+    id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new,
+    email_change, email_change_token_current, reauthentication_token
+  )
+  VALUES (
+    gen_random_uuid(),
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated', 'authenticated',
+    'e2e+test@softhair.com',
+    extensions.crypt('e2e-test-pwd-2026', extensions.gen_salt('bf', 10)),
+    now(),
+    '{"provider": "email", "providers": ["email"]}'::jsonb,
+    '{"name": "E2E Test Salon Owner"}'::jsonb,
+    now(), now(),
+    '', '', '', '', '', ''
+  )
+  RETURNING id INTO v_user_id;
+
+  -- Defense (trigger should have populated; ON CONFLICT no-op if already there)
+  INSERT INTO public.users (id, email, name)
+  VALUES (v_user_id, 'e2e+test@softhair.com', 'E2E Test Salon Owner')
+  ON CONFLICT (id) DO NOTHING;
+
+  -- 2. salon
+  INSERT INTO public.salons (name, slug, city, cnpj, owner_user_id)
+  VALUES ('Salão E2E', 'salao-e2e', 'São Paulo', '00000000000000', v_user_id)
+  RETURNING id INTO v_salon_id;
+
+  UPDATE public.users SET default_salon_id = v_salon_id WHERE id = v_user_id;
+
+  -- 3. membership
+  INSERT INTO public.salon_members (salon_id, user_id, role)
+  VALUES (v_salon_id, v_user_id, 'OWNER');
+
+  -- 4. professionals
+  INSERT INTO public.professionals (salon_id, name, slug, specialties, commission_default_percent) VALUES
+    (v_salon_id, 'Profissional Teste 1', 'profissional-1', ARRAY['corte', 'barba'], 50.00),
+    (v_salon_id, 'Profissional Teste 2', 'profissional-2', ARRAY['coloração', 'escova'], 60.00);
+
+  -- 5. services
+  INSERT INTO public.services (salon_id, name, category, duration_minutes, price_brl, commission_override_percent) VALUES
+    (v_salon_id, 'Corte Masculino', 'cabelo', 30, 50.00,  50.00),
+    (v_salon_id, 'Coloração',       'cabelo', 90, 150.00, 60.00),
+    (v_salon_id, 'Escova',          'cabelo', 45, 70.00,  50.00);
+
+  -- 6. clients
+  INSERT INTO public.clients (salon_id, name, phone_e164, email, lgpd_consent_at, lgpd_consent_text_hash) VALUES
+    (v_salon_id, 'Cliente Teste 1', '+5511999000001', 'cliente1@e2e.softhair.com', now(), 'e2e_test_consent_v1'),
+    (v_salon_id, 'Cliente Teste 2', '+5511999000002', 'cliente2@e2e.softhair.com', now(), 'e2e_test_consent_v1'),
+    (v_salon_id, 'Cliente Teste 3', '+5511999000003', 'cliente3@e2e.softhair.com', now(), 'e2e_test_consent_v1');
+
+  RAISE NOTICE 'Setup completo. user_id=% salon_id=% (password=e2e-test-pwd-2026)', v_user_id, v_salon_id;
+END $$;
+```
+
+### Como deletar (se quiser recriar do zero)
+
+```sql
+-- ATENÇÃO: rode SOMENTE em softhair-dev. CASCADE elimina tudo: salon + prof + services + clients + appointments + qualquer dado associado.
+DO $$
+DECLARE
+  v_user_id UUID;
+  v_salon_id UUID;
+BEGIN
+  SELECT id INTO v_user_id FROM auth.users WHERE email = 'e2e+test@softhair.com';
+  SELECT id INTO v_salon_id FROM public.salons WHERE slug = 'salao-e2e';
+
+  IF v_salon_id IS NOT NULL THEN
+    -- Apaga em ordem reversa de FK
+    DELETE FROM public.appointments WHERE salon_id = v_salon_id;
+    DELETE FROM public.clients WHERE salon_id = v_salon_id;
+    DELETE FROM public.services WHERE salon_id = v_salon_id;
+    DELETE FROM public.professionals WHERE salon_id = v_salon_id;
+    DELETE FROM public.salon_members WHERE salon_id = v_salon_id;
+    UPDATE public.users SET default_salon_id = NULL WHERE default_salon_id = v_salon_id;
+    DELETE FROM public.salons WHERE id = v_salon_id;
+  END IF;
+
+  IF v_user_id IS NOT NULL THEN
+    DELETE FROM public.users WHERE id = v_user_id;
+    DELETE FROM auth.users WHERE id = v_user_id;
+  END IF;
+END $$;
+```
+
+### Pattern para `seed` fixture (Phase 2 Task 2.2)
+
+A fixture `seed` deve usar `SUPABASE_SERVICE_ROLE_KEY` (já está em GH Actions secrets) para fazer INSERTs per-spec adicionais (appointments, clients extra, etc) e cleanup em `afterEach`. Sugestão de pattern:
+
+```typescript
+// apps/web/e2e/fixtures/seed.ts (skeleton)
+import { createClient } from '@supabase/supabase-js';
+
+const TEST_SALON_ID = '4e5b99ca-2fc0-46cd-a634-ef8e5b84a1b7';
+const TEST_USER_ID  = 'a01c0eda-4938-45fc-afbf-15a12fdd02b4';
+
+export function createServiceRoleClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
+
+export async function seedAppointment(opts: { ... }) {
+  const sb = createServiceRoleClient();
+  const { data, error } = await sb.from('appointments').insert({
+    salon_id: TEST_SALON_ID,
+    professional_id: opts.professionalId,
+    /* ... */
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function cleanupTestAppointments() {
+  const sb = createServiceRoleClient();
+  await sb.from('appointments').delete().eq('salon_id', TEST_SALON_ID);
+}
+```
+
+### Pattern para `auth` fixture (Phase 2 Task 2.1)
+
+```typescript
+// apps/web/e2e/fixtures/auth.ts (skeleton)
+import type { Page } from '@playwright/test';
+
+export async function loginAsTestSalonOwner(page: Page) {
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.getByTestId('login-email').fill('e2e+test@softhair.com');
+  await page.getByTestId('login-password').fill('e2e-test-pwd-2026');
+  await page.getByTestId('login-submit').click();
+  await page.waitForURL(/\/(dashboard|hoje|profissionais)/, { timeout: 10_000 });
+}
+```
+
+Os `data-testid` em `login-email`, `login-password`, `login-submit` precisam ser adicionados no formulário de login do app — listar em Task 2.1 do `HARD.1`.
 
 ---
 
@@ -255,10 +438,13 @@ Playwright is the **only** gate that exercises the full stack against a real bro
 ## Known gotchas
 
 - **`load` vs `domcontentloaded`** — see Convention #3 above. Always `domcontentloaded`.
-- **First-compile latency in dev mode.** Next 15 compiles routes on demand; the first request to a new route can take 20–40s. Local test timeout is 60s for this reason. CI uses `next start` so this is irrelevant there.
-- **Webkit is slow.** ~1.5–2× Chromium. Bumping global timeout to 60s accommodates this.
+- **First-compile latency in dev mode.** Next 15 compiles routes on demand; the first request to a new route can take 20–60s on Webkit. Local `navigationTimeout` is 60s for this reason. CI uses `next build && next start` so this is irrelevant there. Auth-gated specs are flaky in local dev mode; trust CI (production build) as the source of truth.
+- **Webkit is slow.** ~1.5–2× Chromium. Global timeout 60s accommodates this.
 - **Linux is case-sensitive.** Windows/macOS will let `Foo.spec.ts` import from `./fixtures` resolve a different-cased path; Linux CI won't. Stick to lowercase paths.
 - **`pnpm --filter ... exec playwright`** sometimes prints `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL` even on success when the test exit code is non-zero (e.g. `--list` with 0 specs). Cosmetic — doesn't affect CI verdict, which uses the playwright exit code via the `pnpm exec` step in the workflow.
+- **Direct `INSERT INTO auth.users` requires empty-string token fields.** GoTrue's Go scanner panics if `confirmation_token`, `recovery_token`, `email_change_token_new`, `email_change`, `email_change_token_current`, or `reauthentication_token` are NULL — login returns 500 "Database error querying schema". Always set them to `''`. Surfaced during Phase 2 of HARD.1 (2026-05-02). Reflected in the SQL block above.
+- **Direct password hash via `crypt()` requires bcrypt cost 10.** GoTrue verifies passwords against `$2a$10$...` hashes; default `gen_salt('bf')` produces cost-6 hashes that GoTrue rejects as "Email ou senha incorretos". Use `gen_salt('bf', 10)` explicitly.
+- **`MNT-A11Y-001` (tracked):** `/servicos` has a `<select>` without an accessible name (axe-core rule `select-name`). Spec excludes it temporarily; remove exclude after fix.
 
 ---
 

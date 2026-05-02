@@ -91,6 +91,9 @@ Gate: `docs/qa/gates/2.5-client-history.yml` (CONCERNS — deploy-condition reso
 |---|---|---|---|---|---|
 | MNT-CONFIG-001 | low | P2 | open | `core-config.yaml#architectureSharded: true` desincronizado com a realidade — architecture é monolítico em `docs/architecture.md`, não há shards em `docs/architecture/` (apenas `ADR-0003-auth-email-password.md`). Também: `devLoadAlwaysFiles` aponta `docs/framework/{coding-standards,tech-stack,source-tree}.md` mas dir contém apenas handoffs Apr-21. **Decisão:** corrigir config OU criar os shards faltantes — não bloqueia stories ativas (River e Pax usam fallback monolítico). Registrado durante validação de HARD.1 (2026-05-01). | @architect |
 | MNT-CONFIG-002 | low | P2 | open | `coderabbit_integration` block ausente em `core-config.yaml` mas dev agent yaml espera `enabled: true` (e stories — Story 2.7, HARD.1 — populam a seção CodeRabbit Integration corretamente). Adicionar bloco explícito ao core-config para alinhar source-of-truth. Registrado durante validação de HARD.1. | @aiox-master |
+| MNT-DBADVISOR-001 | low | P2 | open | `get_advisors(softhair-dev, security)` retorna 5 funções com `search_path` role-mutable (`prevent_credits_log_mutation`, `compute_appointment_ends_at`, `slugify`, `set_updated_at`, `unaccent_portuguese`). Fix barato: `ALTER FUNCTION ... SET search_path = public, pg_catalog`. Não bloqueante (nenhuma exploitação ativa) mas hardening recomendado. Adicionalmente: 22 RPCs `SECURITY DEFINER` flag-adas como executáveis por `anon`/`authenticated` — **esses são intencionais** (RPCs públicas Stories 2.4/2.7); documentar como aceito (waiver) na próxima auditoria de segurança. Registrado durante validação MCP em 2026-05-02. | @data-engineer |
+| MNT-DEVOPS-001 | medium | P1 | open | Instalar **CodeRabbit GitHub App** (https://github.com/apps/coderabbitai) no repo `soft-hair`. CodeRabbit CLI local requer WSL (não disponível no dev machine atual) e PRs anteriores (#26, #28) foram mergeados sem review automatizada — gap de qualidade. App grátis pra repos públicos OU plan free pra repos privados pequenos. Beneficia: HARD.1 Phase 2, todas próximas stories, PRs subsequentes. Configurar `.coderabbit.yaml` opcionalmente após instalação. Registrado em 2026-05-02 durante PR #30 (HARD.1 Phase 1). | @devops |
+| MNT-A11Y-001 | medium | P1 | open | `/servicos` tem `<select>` (filtro de categoria provavelmente) **sem nome acessível** — axe-core rule `select-name` (CRITICAL). Identificado durante Phase 2 do HARD.1 via spec service-crud E2E. Spec atual exclui `select` do scan com TODO; remover exclude após fix. Fix esperado: adicionar `<label htmlFor>` ou `aria-label` no select. Registrado 2026-05-02. | @dev / @ux-design-expert |
 
 ---
 
@@ -101,16 +104,16 @@ Gate: `docs/qa/gates/2.5-client-history.yml` (CONCERNS — deploy-condition reso
 | TEST | 8 | 0 | 0 | 8 |
 | PERF | 2 | 1 | 1 | 4 |
 | REQ | 4 | 0 | 0 | 4 |
-| MNT | 5 | 0 | 0 | 5 |
+| MNT | 7 | 0 | 0 | 7 |
 | DOC | 1 | 0 | 0 | 1 |
 | SEC | 0 | 0 | 1 | 1 |
 | DATA | 1 | 0 | 0 | 1 |
-| A11Y | 3 | 0 | 0 | 3 |
+| A11Y | 4 | 0 | 0 | 4 |
 | OBS | 1 | 0 | 0 | 1 |
 | TYPES | 1 | 0 | 0 | 1 |
 | VAL | 1 | 0 | 0 | 1 |
 | INFRA | 1 | 0 | 0 | 1 |
-| **Total** | **28** | **1** | **2** | **31** |
+| **Total** | **31** | **1** | **2** | **34** |
 
 ### Itens pareados (setup único resolve múltiplos)
 
@@ -159,3 +162,8 @@ Conjunto coeso pra um sprint único de hardening:
 | 2026-04-29 | **Decisão Founder pós-Epic 2:** promover hardening sprint antes de Epic 3. 7 itens P1/P2 → **P0**: 1.5/1.6/1.7/2.4/2.5-TEST-001 (E2E Playwright cobrindo 5 stories), 1.7-TEST-002 (axe-core par natural), 2.5-INFRA-001 (Node 20 deprecation deadline 2026-06-02). Setup único Playwright + axe-core + workflows update. Próximo passo: @sm draft hardening story (handoff `po-to-sm-hardening-sprint-2026-04-29.yaml`). | Pax (PO) |
 | 2026-05-01 | Story `HARD.1` draftada por River (@sm) — single chunky story consolidando os 7 P0 acima. 7 ACs + 11 Tasks + 6 Risks. ID `HARD.1` (não `2.8`) para preservar Epic 2 = 100% closed status. Próximo passo: @po `*validate-story-draft HARD.1`. | River (SM) |
 | 2026-05-02 | `*validate-story-draft HARD.1` → **GO (10/10)**. Status Draft → Ready. 2 itens novos no backlog (cross-epic): `MNT-CONFIG-001` (architectureSharded desync) + `MNT-CONFIG-002` (coderabbit_integration ausente em core-config). Ambos low/P2, não bloqueiam. Próximo passo: @dev `*develop HARD.1`. | Pax (PO) |
+| 2026-05-02 | `*develop HARD.1` Phase 1 of 2 (parallel-safe scope) shipped via PR #30 (draft, 7/7 CI verde primeira tentativa). Tasks 1, 2.3-2.5, 8, 9, 10 done. Tasks 2.1, 2.2, 3-7, 11 paused. Branch `chore/hardening-priority-promotion` → `feat/HARD.1-e2e-hardening`. | Dex (Dev) + Gage (DevOps) |
+| 2026-05-02 | Validação MCP `supabase-project-softhair` (Gage). Confirmado funcional em softhair-dev. `gh secret list` repo: vazio — `SUPABASE_SERVICE_ROLE_KEY` ausente em CI secrets (Founder action requerida pra desbloquear Task 2.2). 1 item novo no backlog: `MNT-DBADVISOR-001` (5 funções com search_path mutable, fix barato pra Dara). | Gage (DevOps) |
+| 2026-05-02 | `SUPABASE_SERVICE_ROLE_KEY` adicionado em GH Actions secrets via `gh secret set` (Founder forneceu valor). **`PREREQ-SUPABASE-SERVICE-ROLE` resolvido** — Phase 2 Task 2.2 (seed fixture) destravada do lado de CI. Único blocker remanescente para Phase 2 começar: `PREREQ-TEST-USER` (criação de `e2e+test@softhair.com` em softhair-dev por Founder). Recomendação de hygiene: rotacionar secret após Phase 2 estabilizar (~2 semanas). | Gage (DevOps) |
+| 2026-05-02 | Founder autorizou Dara (@data-engineer) criar `PREREQ-TEST-USER` via MCP `supabase-project-softhair`. Handoff `gage-to-dara-create-test-user-2026-05-02.yaml` escrito com spec completo (1 salon + 2 prof + 3 services + 3 clients pré-seedados). Identificado também: **CodeRabbit GitHub App não está instalado no repo** — PRs #26, #28, #30 ficaram sem review automática (CLI local depende de WSL ausente no dev machine). Novo item: `MNT-DEVOPS-001` (P1, instalar GitHub App pra futuras stories). Monitor PR #30 stoppado (não vai trazer review automática). | Gage (DevOps) |
+| 2026-05-02 | Dara (@data-engineer) criou test user + fixture mínima em softhair-dev via MCP `execute_sql` (approach idempotente, NÃO virou migration nem entry em supabase/seed.sql — eliminado risco de prod-leak). Verificação 100% (auth user + public user via trigger + salon + member + 2 prof + 3 services + 3 clients). Credentials + SQL completo + skeletons de auth/seed fixture documentados em `docs/testing/e2e.md`. **`PREREQ-TEST-USER` resolved** — Phase 2 totalmente destravada. Handoff `dara-to-dev-test-user-ready-2026-05-02.yaml` escrito com IDs hardcoded (test_user_id `a01c0eda-...`, test_salon_id `4e5b99ca-...`) prontos pra fixture. | Dara (Data Engineer) |

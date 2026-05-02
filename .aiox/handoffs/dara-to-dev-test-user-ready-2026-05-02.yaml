@@ -1,0 +1,168 @@
+from_agent: data-engineer
+to_agent: dev
+last_command: run-sql
+story: "HARD.1"
+timestamp: "2026-05-02T14:30:00Z"
+consumed: true
+
+context:
+  source_handoff: "gage-to-dara-create-test-user-2026-05-02.yaml"
+  story_file: "docs/stories/HARD.1.story.md"
+  documentation: "docs/testing/e2e.md (seção 'Seed data + test user' — agora populated, removed o placeholder)"
+  founder_authorization: "2026-05-02 — Founder autorizou execução autônoma via MCP supabase-project-softhair"
+
+phase_2_unblocked:
+  PREREQ-SUPABASE-SERVICE-ROLE: "✅ resolved (Gage 2026-05-02 — secret em GH Actions)"
+  PREREQ-TEST-USER: "✅ resolved (Dara 2026-05-02 — fixture criada via MCP em softhair-dev)"
+
+what_dara_did:
+  approach_chosen: |
+    execute_sql direto em softhair-dev via MCP. NÃO foi criada migration em
+    supabase/migrations/ nem entry em supabase/seed.sql — propositalmente, pra
+    eliminar o risco de execução acidental em prod via migration runner.
+
+    SQL completo (idempotente, com guard de "se já existe → abort sem erro")
+    está documentado em docs/testing/e2e.md seção "Seed data + test user".
+    Qualquer dev que precisar recriar pode copy-paste de lá.
+
+  data_created:
+    auth_user:
+      email: "e2e+test@softhair.com"
+      password: "e2e-test-pwd-2026"
+      auth_id: "a01c0eda-4938-45fc-afbf-15a12fdd02b4"
+      email_confirmed: true
+      raw_user_meta_data: '{"name": "E2E Test Salon Owner"}'
+
+    public_user:
+      created_by: "trigger handle_new_auth_user (validado pós-insert)"
+      id: "a01c0eda-4938-45fc-afbf-15a12fdd02b4"
+      name: "E2E Test Salon Owner"
+      default_salon_id: "4e5b99ca-2fc0-46cd-a634-ef8e5b84a1b7"
+
+    salon:
+      id: "4e5b99ca-2fc0-46cd-a634-ef8e5b84a1b7"
+      name: "Salão E2E"
+      slug: "salao-e2e"
+      city: "São Paulo"
+      cnpj: "00000000000000 (test marker — easy to grep/exclude in analytics)"
+      subscription_status: "TRIAL (default)"
+      cancel_window_hours: 24
+      trial_ends_at: "now() + 14d (default)"
+
+    salon_member:
+      role: "OWNER"
+      user_id: "a01c0eda-..."
+      salon_id: "4e5b99ca-..."
+
+    professionals:
+      count: 2
+      details:
+        - slug: "profissional-1"
+          name: "Profissional Teste 1"
+          specialties: ["corte", "barba"]
+          commission_default_percent: 50
+          working_hours: "default seg-sab 09:00-18:00"
+        - slug: "profissional-2"
+          name: "Profissional Teste 2"
+          specialties: ["coloração", "escova"]
+          commission_default_percent: 60
+          working_hours: "default seg-sab 09:00-18:00"
+
+    services:
+      count: 3
+      details:
+        - name: "Corte Masculino"
+          category: "cabelo"
+          duration_minutes: 30
+          price_brl: 50
+          commission_override_percent: 50
+        - name: "Coloração"
+          category: "cabelo"
+          duration_minutes: 90
+          price_brl: 150
+          commission_override_percent: 60
+        - name: "Escova"
+          category: "cabelo"
+          duration_minutes: 45
+          price_brl: 70
+          commission_override_percent: 50
+
+    clients:
+      count: 3
+      details:
+        - name: "Cliente Teste 1"
+          phone_e164: "+5511999000001"
+          email: "cliente1@e2e.softhair.com"
+          lgpd_consent: "yes (now())"
+        - name: "Cliente Teste 2"
+          phone_e164: "+5511999000002"
+          email: "cliente2@e2e.softhair.com"
+          lgpd_consent: "yes (now())"
+        - name: "Cliente Teste 3"
+          phone_e164: "+5511999000003"
+          email: "cliente3@e2e.softhair.com"
+          lgpd_consent: "yes (now())"
+
+  verification_passed: |
+    Pós-insert checks:
+    - auth.users count = 1 ✓
+    - public.users count = 1 (trigger funcionou) ✓
+    - salons count = 1 ✓
+    - salon_members count = 1 ✓
+    - professionals count = 2 ✓
+    - services count = 3 ✓
+    - clients count = 3 ✓
+    - default_salon_id setado ✓
+    - public.users.name = "E2E Test Salon Owner" (lido de raw_user_meta_data) ✓
+
+  not_done_intentionally:
+    - "Snapshot pré-operação NÃO foi criado (handoff sugeria *snapshot baseline-pre-e2e-test-user). Justificativa: operação é INSERT only, não DDL — schema não muda; rollback via DELETE é trivial e está documentado em docs/testing/e2e.md."
+    - "Não rodei security-audit pós-insert. Findings prévios em get_advisors security já estão tracked como MNT-DBADVISOR-001."
+    - "MNT-DBADVISOR-001 (5 search_path mutable functions) NÃO foi corrigido nesta sessão — escopo era só test user setup."
+
+ready_for_dev:
+  next_command: "*develop HARD.1"
+  active_branch: "feat/HARD.1-e2e-hardening"
+  pr: "https://github.com/GilsonJunior-Developer/soft-hair/pull/30 (draft)"
+
+  tasks_to_pickup:
+    - "2.1 — auth.ts fixture (skeleton sugerido em docs/testing/e2e.md). Adicionar data-testid login-email/login-password/login-submit no app de login."
+    - "2.2 — seed.ts fixture (skeleton sugerido em docs/testing/e2e.md). Use TEST_SALON_ID + TEST_USER_ID constantes."
+    - "3-7 — 5 specs (professional-crud, service-crud, dashboard-hoje, self-booking, clients). Cada um cria seus dados extra via seed.ts e limpa em afterEach."
+    - "11 — smoke run em CI + atualizar docs/qa/backlog.md (7 P0 items → done)."
+
+  files_to_reference_in_dev:
+    - "docs/testing/e2e.md → seção 'Seed data + test user' tem tudo (credentials, IDs, SQL, skeletons de fixture)"
+    - "apps/web/e2e/fixtures/index.ts → axe fixture já existe; adicionar authedPage + seed extending dele"
+    - "apps/web/e2e/smoke.spec.ts → exemplo de spec rodando contra o app sem login (referência pra data-testid pattern)"
+
+things_to_call_out_for_qa_review:
+  - "test_user.password está em texto plano em docs/testing/e2e.md — isso é intencional pra DX (qualquer dev pode reproduzir o setup). Mitigation: o user só existe em softhair-dev, nunca em prod. Founder autorizou explicitamente esse padrão."
+  - "test_salon.cnpj = '00000000000000' (all-zeros) — propositalmente inválido para grep/excluir analytics futuras. Validar com Quinn que isso não bate algum CHECK constraint que possa quebrar features (não vi nenhum, mas vale double-check)."
+
+future_concerns_not_blocking:
+  - "Quando supabase db reset for rodado em dev, a fixture some. Solução: rodar o SQL block de docs/testing/e2e.md manualmente. Se isso virar fricção, considerar mover pra supabase/seed.sql canônico (mas há risco de executar em outros ambientes — discutir com @architect antes)."
+  - "Se Phase 2 specs precisarem de mais variantes (cliente sem email, profissional inativo, serviço soft-deleted), criar via seed.ts em runtime — não inflar a fixture base."
+
+suggested_command: "*develop HARD.1 (continue Phase 2)"
+
+after_dev_completion:
+  next_agent: "@qa"
+  next_command: "*review HARD.1"
+  alternative: "@dev *apply-qa-fixes (if QA returns REJECT)"
+
+notes_to_dev: |
+  Você pode prosseguir Phase 2 imediatamente. Tudo que precisa está em
+  docs/testing/e2e.md. Os IDs hardcoded (test_user_id e test_salon_id) podem
+  ir como constantes em apps/web/e2e/fixtures/seed.ts pra não perder em
+  refactor futuro.
+
+  Mantenha a discipline de data-testid + domcontentloaded + axe-em-toda-spec
+  da Phase 1. Smoke spec atual é o exemplo canônico do pattern.
+
+  Quality gate antes de marcar Ready for Review:
+  - Lint + typecheck + vitest (no regression)
+  - pnpm test:e2e local com browsers chromium + webkit (todos green)
+  - Push pra branch feat/HARD.1-e2e-hardening (PR #30 atualiza)
+  - CI all green com novo job e2e (matrix chromium + webkit)
+  - Sinal pra @qa via *review

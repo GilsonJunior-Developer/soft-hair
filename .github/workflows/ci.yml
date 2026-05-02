@@ -85,6 +85,11 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium, webkit]
+    env:
+      # Build embeds NEXT_PUBLIC_* into the bundle; runtime needs all three.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v6
 
