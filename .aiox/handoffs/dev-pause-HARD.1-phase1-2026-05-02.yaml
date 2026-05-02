@@ -1,0 +1,94 @@
+from_agent: dev
+to_agent: dev
+last_command: develop
+story: "HARD.1"
+timestamp: "2026-05-02T01:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/HARD.1.story.md"
+  story_status: "InProgress"
+  phase_completed: "Phase 1 of 2 — parallel-safe scope"
+  phase_remaining: "Phase 2 — auth + seed fixtures + 5 specs + smoke run"
+
+phase_1_summary:
+  tasks_done: [1, 2.3, 2.4, 2.5, 8, 9, 10]
+  tasks_remaining: [2.1, 2.2, 3, 4, 5, 6, 7, 11]
+  files_created:
+    - apps/web/playwright.config.ts
+    - apps/web/e2e/fixtures/axe.ts
+    - apps/web/e2e/fixtures/index.ts
+    - apps/web/e2e/smoke.spec.ts
+    - docs/testing/e2e.md
+  files_modified:
+    - apps/web/package.json
+    - package.json
+    - turbo.json
+    - pnpm-lock.yaml
+    - .gitignore
+    - README.md
+    - .github/workflows/ci.yml
+    - docs/architecture.md
+  quality_gates:
+    lint: pass
+    typecheck: pass
+    vitest: 37/37 pass (no regression)
+    build: pass (5m13s)
+    smoke_e2e_local: 6/6 pass
+
+prereqs_blocking_phase_2:
+  - id: PREREQ-TEST-USER
+    owner: Founder
+    severity: medium
+    blocks: [Task 2.1]
+    action_required: |
+      Create test user e2e+test@softhair.com in softhair-dev (NOT prod).
+      Minimal salon setup: 3 services + 2 professionals + 3 clients pre-seeded.
+      SQL setup script will be authored in Task 2.2 once secret confirmed.
+      Communicate completion via .aiox/handoffs/founder-to-dev-test-user-ready-{date}.yaml
+      OR direct message in chat.
+
+  - id: PREREQ-SUPABASE-SERVICE-ROLE
+    owner: "@devops (Gage)"
+    severity: low
+    blocks: [Task 2.2]
+    action_required: |
+      Verify SUPABASE_SERVICE_ROLE_KEY is in GitHub Actions secrets:
+        gh secret list --repo GilsonJunior-Developer/soft-hair
+      If missing, add it (value from softhair-dev project settings).
+      No prod secret needed — E2E only runs against dev/preview.
+
+phase_2_resume_plan:
+  step_1: "Verify prereqs resolved (test user exists + secret confirmed)"
+  step_2: "Task 2.1 — write apps/web/e2e/fixtures/auth.ts (Supabase OTP flow)"
+  step_3: "Task 2.2 — write apps/web/e2e/fixtures/seed.ts (Service Role + cleanup hooks)"
+  step_4: "Tasks 3-7 — 5 specs in parallel (independent files): professional-crud, service-crud, dashboard-hoje, self-booking, clients"
+  step_5: "While writing specs: add data-testid attributes to source where missing (each spec lists testids in its task notes)"
+  step_6: "Task 11 smoke run prep: local pnpm test:e2e all green chromium + webkit"
+  step_7: "CodeRabbit self-healing pass (light mode, 2 iter, CRITICAL+HIGH)"
+  step_8: "Task 11.4: update docs/qa/backlog.md → 7 items P0 done"
+  step_9: "Story Status: InProgress → Ready for Review"
+  step_10: "Handoff to @qa for *review HARD.1"
+
+flags_for_resume_session:
+  - "Task 1.6 smoke spec (apps/web/e2e/smoke.spec.ts) STAYS after Phase 2 — cheap canary"
+  - "continue-on-error: true on E2E job is TIME-BOXED (1 week post-merge). Track removal as backlog item at story close."
+  - "If Task 6 (self-booking) timing assert flakes in CI, RISK-TIMING-2_4 mitigation (cap 90s warn-only) is documented in story Risks"
+  - "@playwright/test version: stay on 1.59.x (architecture.md 1.4x is stale, will be updated by @architect in MNT-CONFIG-001 cleanup)"
+
+what_to_NOT_do_in_resume:
+  - "Don't push branch — that's @devops *push (separate phase)"
+  - "Don't modify story Story / Acceptance Criteria / Dev Notes / Risks sections — read-only for @dev"
+  - "Don't bypass CodeRabbit self-healing — it's a story-completion gate"
+  - "Don't crank retries: 2 → 5+ to mask flake — RISK-FLAKY mitigation is data-testid + waitForResponse, not retry mascarando"
+
+immediate_user_options:
+  option_a: "Activate @devops (*push) to land Phase 1 as a draft PR. CI will validate the workflow + smoke spec; review feedback informs Phase 2 fixture design."
+  option_b: "Wait until prereqs unblocked, do all of HARD.1 in one PR (longer cycle but cleaner diff)."
+
+  recommendation: |
+    Option A. Phase 1 is well-bounded (no incomplete code paths — the placeholder
+    fixtures index.ts has explicit comments), CI will exercise the smoke spec,
+    and any CodeRabbit feedback on Phase 1 informs Phase 2 (saves rework).
+    Phase 2 ships as a follow-up commit on the same branch (or separate PR if
+    @po prefers).

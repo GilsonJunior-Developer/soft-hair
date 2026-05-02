@@ -1,0 +1,150 @@
+from_agent: devops
+to_agent: data-engineer
+last_command: validate-mcp-autonomy
+story: "HARD.1"
+timestamp: "2026-05-02T13:55:00Z"
+consumed: true
+
+context:
+  source_story: "docs/stories/HARD.1.story.md"
+  blocker_resolving: "PREREQ-TEST-USER (Phase 2 Task 2.1 + 2.2)"
+  founder_authorization: "2026-05-02 — Founder explicitamente autorizou Dara criar via MCP supabase-project-softhair"
+  mcp_autonomy_memory: "memory/reference_supabase_mcp_autonomy.md"
+
+target_environment:
+  project: softhair-dev
+  project_id: oywizkjldmxhatvftmho
+  region: us-east-2
+  postgres_version: "17.6.1.104"
+  notes: |
+    NUNCA criar em softhair-prod. softhair-dev é sandbox legítimo pra E2E.
+    Schema atual: 16 tables, todas RLS-enabled (validado por Gage 2026-05-02).
+
+test_user_spec:
+  email: "e2e+test@softhair.com"
+  display_name: "E2E Test Salon Owner"
+  password: |
+    Use senha forte gerada via openssl rand -base64 24 OU via supabase admin
+    sem senha (passwordless via OTP — match com o flow real do app).
+    Recomendação: passwordless com OTP que tenha bypass em dev (mock OTP code
+    via env var pra E2E auth fixture poder logar).
+
+salon_setup:
+  name: "Salão E2E"
+  city: "São Paulo"
+  cnpj: "00000000000000"
+  notes: "CNPJ all-zeros pra deixar claro que é test data. Validar se constraint aceita; se rejeitar, usar CNPJ válido sintético"
+
+  professionals_count: 2
+  professionals_spec:
+    - name: "Profissional Teste 1"
+      slug: "profissional-1"
+      commission_pct: 50
+      specialties: ["corte", "barba"]
+    - name: "Profissional Teste 2"
+      slug: "profissional-2"
+      commission_pct: 60
+      specialties: ["coloração", "escova"]
+
+  services_count: 3
+  services_spec:
+    - name: "Corte Masculino"
+      duration_minutes: 30
+      price_cents: 5000
+      commission_pct: 50
+    - name: "Coloração"
+      duration_minutes: 90
+      price_cents: 15000
+      commission_pct: 60
+    - name: "Escova"
+      duration_minutes: 45
+      price_cents: 7000
+      commission_pct: 50
+
+  clients_count: 3
+  clients_spec:
+    - name: "Cliente Teste 1"
+      phone_e164: "+5511999000001"
+      email: "cliente1@e2e.softhair.com"
+    - name: "Cliente Teste 2"
+      phone_e164: "+5511999000002"
+      email: "cliente2@e2e.softhair.com"
+    - name: "Cliente Teste 3"
+      phone_e164: "+5511999000003"
+      email: "cliente3@e2e.softhair.com"
+
+execution_approach_recommended:
+  preferred: |
+    Criar como migration idempotente em supabase/migrations/, com prefix
+    explicito "_e2e_test_user" + comentário "ONLY APPLY TO softhair-dev — DO NOT
+    APPLY TO softhair-prod". Use INSERT ... ON CONFLICT DO NOTHING para idempotência.
+
+    Pattern:
+      1. Criar auth.user via supabase admin API ou direct INSERT em auth.users
+         (com providers, email_confirmed_at, etc) — só aplicável em dev
+      2. handle_new_auth_user trigger insere public.users automaticamente (se
+         configurado); senão INSERT manual
+      3. INSERT em salons + salon_members (role='owner')
+      4. INSERT em professionals (FK salon_id)
+      5. INSERT em services (FK salon_id; pode usar service_catalog id +
+         override de price/duration)
+      6. INSERT em clients (FK salon_id)
+
+  alternative_if_migration_too_heavy: |
+    Script standalone em supabase/seed/e2e-test-user.sql que pode ser rodado
+    via supabase db reset --seed em dev. Não vai pra migrations/ history.
+    Vantagem: nunca acidentalmente roda em prod.
+
+constraints_and_gotchas:
+  - "softhair-dev tem 1 salon já existente (`SELECT count(*) FROM salons` = 1, validado por Gage). Verificar se é fixture do Founder ou orphan — não dropar"
+  - "softhair-dev tem 1 user já em public.users (similar) e 1 salon_member"
+  - "service_catalog tem 20 rows globais (read-only) — instanciar serviços a partir desses, NÃO inserir novos em service_catalog"
+  - "phone_e164 é unique per salão — usar prefix +5511999000XXX pra não colidir com fixtures futuras"
+  - "RLS está enabled em todas as tabelas — execute_sql via MCP usa service_role bypass, então RLS não afeta o seed; mas o app code com role authenticated precisa enxergar"
+  - "appointment_status_log + commission_entries são populated via triggers — não inserir manualmente"
+
+deliverables_expected:
+  - id: 1
+    description: "SQL setup script em supabase/migrations/<timestamp>_e2e_test_user.sql OU supabase/seed/e2e-test-user.sql (Dara escolhe melhor approach)"
+  - id: 2
+    description: "Aplicado em softhair-dev via apply_migration ou execute_sql (MCP)"
+  - id: 3
+    description: "Verificação: query SELECT count + relação confirmando salon, prof×2, services×3, clients×3 todos linkados ao test user"
+  - id: 4
+    description: "Atualizar docs/testing/e2e.md (seção 'Seed data + test user') com snippet de como recriar o test user manualmente caso seja deletado"
+  - id: 5
+    description: "Confirmar credenciais (email + senha OU OTP pattern) no handoff de retorno pra @dev usar na auth fixture (Task 2.1)"
+
+after_completion_handoff:
+  to_agent: dev
+  next_command: "*develop HARD.1"
+  context_to_pass: |
+    Phase 2 destravada — ambos PREREQs resolvidos:
+    - PREREQ-SUPABASE-SERVICE-ROLE: ✅ secret em CI (Gage 2026-05-02)
+    - PREREQ-TEST-USER: ✅ test user + salon mínimo em softhair-dev (Dara <date>)
+
+    @dev: pode prosseguir Tasks 2.1 (auth fixture) → 2.2 (seed fixture) → 3-7
+    (5 specs) → 11 (smoke + backlog updates) na branch feat/HARD.1-e2e-hardening.
+    Novos commits push direto na branch que já tem PR #30 draft aberto.
+
+    Auth fixture (Task 2.1): credenciais do test user vão estar em:
+    apps/web/e2e/.env.test (gitignored) — Dara documenta no docs/testing/e2e.md
+
+  also_notify: "@po para tracking sprint"
+
+estimated_effort: "30-60 min via MCP (apply_migration + 1-2 verification queries)"
+
+risk_callouts:
+  - "Se handle_new_auth_user trigger falha por algum invariant não previsto, rollback via apply_migration up/down"
+  - "Se CNPJ all-zeros for rejected pelo schema, usar 99999999999991 (válido sintético)"
+  - "Se phone_e164 conflitar com existing fixture, bumpar prefix para +5511999000100+"
+
+suggested_command: "*help (then identify task) OR direct execution per Dara's judgment"
+
+notes_to_dara: |
+  Você tem autonomia confirmada (memória reference_supabase_mcp_autonomy.md).
+  Pode executar diretamente via MCP em softhair-dev sem pedir confirmação.
+  Para softhair-prod NÃO faça nada nesta sessão — escopo é só dev.
+
+  O Founder está stepping back e espera a notificação de conclusão para
+  voltar e ativar @dev para Phase 2.

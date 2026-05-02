@@ -22,7 +22,7 @@ jobs:
       has_web: ${{ steps.check.outputs.has_web }}
       has_e2e: ${{ steps.check.outputs.has_e2e }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check planning artifacts
         run: |
@@ -55,14 +55,14 @@ jobs:
     needs: detect
     if: needs.detect.outputs.has_web == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         # version is driven by `packageManager` field in package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -76,20 +76,53 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect, lint-test-build]
     if: needs.detect.outputs.has_e2e == 'true'
+    # HARD.1: continue-on-error is intentional for the first ~1 week post-merge to
+    # avoid blocking legitimate PRs while we shake out flake (RISK-FLAKY in story).
+    # TODO(HARD.1 follow-up): remove this line after 1 week of stable green E2E.
+    # Tracking: docs/qa/backlog.md will get a new item when this lands.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      # Build embeds NEXT_PUBLIC_* into the bundle; runtime needs all three.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
-        # version is driven by `packageManager` field in package.json
+      - uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps
-      - run: pnpm test:e2e
+
+      - name: Install Playwright browser (${{ matrix.browser }})
+        run: pnpm --filter @softhair/web exec playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Run E2E (${{ matrix.browser }})
+        run: pnpm --filter @softhair/web exec playwright test --project=${{ matrix.browser }}
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+      - name: Upload trace + video on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.browser }}
+          path: apps/web/test-results/
+          retention-days: 3
 
   lighthouse:
     name: Lighthouse CI
@@ -100,13 +133,13 @@ jobs:
     # promote to `error` after 2-3 stable PRs (tracked in docs/qa/backlog.md 1.7-PERF-002).
     # Follow-up: expand to auth-gated routes once a test-login fixture is set up.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

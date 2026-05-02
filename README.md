@@ -53,6 +53,7 @@ soft-hair/
 | `pnpm lint` | ESLint em todo o workspace |
 | `pnpm typecheck` | TypeScript strict check |
 | `pnpm test` | Vitest (unit + integration) |
+| `pnpm test:e2e` | Playwright + axe-core (Chromium + Webkit) — see [docs/testing/e2e.md](./docs/testing/e2e.md) |
 | `pnpm format` | Prettier em `**/*.{ts,tsx,md,yaml,json}` |
 
 ## Stack (do [architecture.md](./docs/architecture.md))

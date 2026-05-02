@@ -1,0 +1,54 @@
+from_agent: sm
+to_agent: po
+last_command: draft
+story: "HARD.1"
+timestamp: "2026-05-01T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/HARD.1.story.md"
+  story_id: "HARD.1"
+  story_title: "Hardening Sprint Pré-Epic 3 — E2E Playwright + axe-core + GitHub Actions Update"
+  source_handoff: "po-to-sm-hardening-sprint-2026-04-29.yaml"
+  status_when_handed_off: "Draft"
+
+draft_summary: |
+  Single chunky hardening story consolidating 7 P0 backlog items
+  (1.5/1.6/1.7/2.4/2.5-TEST-001 + 1.7-TEST-002 + 2.5-INFRA-001).
+  7 ACs, 11 tasks, 6 risks documented. Cross-epic track (HARD.x prefix
+  rather than Epic 2.8). CodeRabbit Integration: Deployment/Infrastructure
+  primary, complexity=High.
+
+self_check_against_story_draft_checklist:
+  result: READY
+  clarity_score: 9
+  partial_items: []
+  flags_for_po:
+    - id: "FLAG-NUMBERING"
+      desc: |
+        Story ID is HARD.1 (handoff's first choice) instead of 2.8 (handoff's alternative).
+        Rationale: Epic 2 closed at 100% (7/7) on 2026-04-29; hardening spans 5 stories
+        across Epic 1 + Epic 2; HARD.x makes traceability cleaner. PO override is cheap
+        (single git mv + heading rewrite).
+    - id: "FLAG-CONFIG-DRIFT"
+      desc: |
+        core-config.yaml#architectureSharded: true is desynchronized with reality
+        (architecture is monolithic in docs/architecture.md, no docs/architecture/ shards
+        beyond ADR-0003). Called out in story Dev Notes#Project Structure Notes and
+        explicitly scoped OUT. Worth a separate followup with @architect — not blocking
+        this story.
+
+priority_validation_checks:
+  - "AC1: confirm Playwright matrix (Chromium + Webkit) is sufficient; handoff out_of_scope excluded Edge/Firefox"
+  - "AC2: 0-critical-violations target — confirm against docs/front-end-spec.md#979"
+  - "AC3: 5 specs map 1:1 to backlog items 1.5/1.6/1.7/2.4/2.5-TEST-001 + 1.7-TEST-002"
+  - "AC5: Node 22→24 + actions v4→v5 — confirm engines.node policy (story keeps >=22.0.0 floor, pins CI to 24)"
+  - "Risks: confirm RISK-TEST-USER (test user creation) is correctly assigned to Founder, not blocking @sm"
+  - "Backlog impact table (Dev Notes): 7 P0 items pre-listed for status update on close — confirm scope match"
+
+prerequisites_called_out_in_story:
+  - "Founder runs `pnpm dlx playwright install --with-deps` once locally"
+  - "Founder confirms test user setup approach (reuse fixture vs new e2e+test@softhair.com)"
+  - "@devops confirms SUPABASE_SERVICE_ROLE_KEY availability in CI secrets (for seed)"
+
+suggested_command: "*validate-story-draft HARD.1"

@@ -1,0 +1,148 @@
+from_agent: po
+to_agent: devops
+last_command: close-story
+story: "HARD.1"
+timestamp: "2026-05-02T15:50:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/HARD.1.story.md"
+  story_status: "Done"
+  pr: "https://github.com/GilsonJunior-Developer/soft-hair/pull/30 (still draft, MERGEABLE)"
+  source_handoff: "devops-to-po-close-HARD.1-2026-05-02.yaml"
+
+close_story_completed:
+  story_status: "Ready for Review → Done"
+  changelog_v1_5_appended: true
+  task_11_fully_closed: true
+
+  backlog_items_resolved:
+    - id: "1.5-TEST-001"
+      from: "open"
+      to: "done"
+      via: "HARD.1 Phase 2 (apps/web/e2e/professional-crud.spec.ts)"
+    - id: "1.6-TEST-001"
+      from: "open"
+      to: "done"
+      via: "HARD.1 Phase 2 (apps/web/e2e/service-crud.spec.ts)"
+    - id: "1.7-TEST-001"
+      from: "open"
+      to: "done"
+      via: "HARD.1 Phase 2 (apps/web/e2e/dashboard-hoje.spec.ts)"
+    - id: "1.7-TEST-002"
+      from: "open"
+      to: "done"
+      via: "HARD.1 Phase 2 (axe-core fixture + assertion em todas specs)"
+    - id: "2.4-TEST-001"
+      from: "open"
+      to: "done"
+      via: "HARD.1 Phase 2 (apps/web/e2e/self-booking.spec.ts)"
+    - id: "2.5-TEST-001"
+      from: "open"
+      to: "done"
+      via: "HARD.1 Phase 2 (apps/web/e2e/clients.spec.ts)"
+    - id: "2.5-INFRA-001"
+      from: "open"
+      to: "done"
+      via: "HARD.1 Phase 1 (Node 24 + actions v6/v7 upgrade)"
+
+  backlog_resumo_agregado_updated:
+    before: { open: 31, done: 2, total: 34 }
+    after: { open: 24, done: 9, total: 34 }
+    test_category: { open_before: 8, open_after: 2 }
+    infra_category: { open_before: 1, open_after: 0 }
+
+  decision_path_b_authorized:
+    by: "Founder (2026-05-02)"
+    rationale: |
+      - CI 7/7 verde primeira tentativa (Phase 1 + Phase 2)
+      - 18 E2E tests passing (9 active × 2 browsers, todos Phase 2)
+      - Vitest 37/37 (no regression)
+      - Real bugs surfaced + tracked separately (MNT-A11Y-001 + GoTrue gotcha)
+      - Precedente Stories 2.5/2.7 fechadas sem QA review formal
+      - CodeRabbit local CLI unavailable (WSL absent) + GitHub bot não instalado (MNT-DEVOPS-001)
+    skipped: "@qa Quinn *review HARD.1 (Path A não escolhido)"
+
+next_action_for_devops:
+  command: "gh pr merge 30 --squash"
+  branch: "feat/HARD.1-e2e-hardening"
+  target: "main"
+
+  pre_merge_checklist:
+    - "Verify PR #30 ainda está MERGEABLE (gh pr view 30 --json mergeable)"
+    - "Verify CI ainda 7/7 verde (gh pr checks 30)"
+    - "Confirm zero conflicts com main (rebase mental check)"
+    - "Pedir Founder authorization explicit antes do merge (irreversible operation per agent rules)"
+
+  squash_commit_message_recommendation:
+    title: "feat(hardening): HARD.1 — Playwright E2E + axe-core + CI Node 24 upgrade (Phase 1 + 2) (#30)"
+    body: |
+      Cross-epic hardening sprint between Epic 2 (closed 100%) and Epic 3 (deferred).
+
+      Phase 1: Playwright + axe-core install + CI E2E job + Node 24/actions v6/v7 upgrade.
+      Phase 2: auth + seed fixtures + 5 minimum-viable specs (1.5/1.6/1.7/2.4/2.5) +
+      data-testids no app + GoTrue gotchas docs + MNT-A11Y-001 surfaced.
+
+      Resolves backlog: 1.5-TEST-001, 1.6-TEST-001, 1.7-TEST-001, 1.7-TEST-002,
+      2.4-TEST-001, 2.5-TEST-001, 2.5-INFRA-001 (7 P0 itens promovidos pré-Epic 3).
+
+      14 active E2E tests + 14 test.fixme (28 total). All passing on production
+      build in CI (chromium + webkit). continue-on-error: true on e2e job is
+      time-boxed for ~1 week stability window (greppable # TODO removal marker).
+
+      Story: docs/stories/HARD.1.story.md (v1.5, Status: Done)
+
+  un_draft_timing:
+    recommendation: "Un-draft junto com merge — gh pr ready 30 antes do merge command, OR usar --auto se preferir"
+    note: "Un-draft é cosmetic; squash merge funciona em draft com admin permissions"
+
+after_merge_actions:
+  branch_cleanup: "feat/HARD.1-e2e-hardening pode ser deletado após merge (gh pr merge 30 --delete-branch fará automatically)"
+
+  followup_issues_to_create:
+    - id: "HARD.1-FU-001 (já planned no devops handoff)"
+      title: "Remove continue-on-error: true do e2e job (1 semana stability window)"
+      grep: "# TODO(HARD.1 follow-up): remove this line"
+      eta: "2026-05-09"
+      owner: "@devops"
+      blocking: false
+
+    - id: "HARD.1-FU-002 (já planned no devops handoff)"
+      title: "Implement test.fixme() deep flows nas 5 specs HARD.1"
+      summary: "10 test.fixme() spread em 5 specs — expandir conforme priorização"
+      eta: "Sprint subsequente"
+      owner: "@dev"
+      blocking: false
+
+  next_story_decision:
+    options:
+      a_install_coderabbit: |
+        @devops resolve MNT-DEVOPS-001 (instalar CodeRabbit GitHub App) ANTES
+        da próxima story — beneficia todas próximas PRs + permite QA loop completo
+      b_fix_a11y_first: |
+        @dev resolve MNT-A11Y-001 (/servicos select-name) — fix curto, melhora baseline
+      c_continue_to_next_story: |
+        @sm draft próxima story (Epic 3 está deferred to Phase 2; pode ser:
+        - Observability/error-tracking story (sucessor natural ao 2.4-PERF-001)
+        - MVP polish (2.5-PERF-001 view server-side)
+        - Pause MVP pra design partner #1 onboarding)
+    recommendation_po: |
+      Lean (a) + (b) primeiro — ambos quick wins (~30 min cada), preparam ground
+      pra próximo cycle. Depois (c) é decisão estratégica do Founder
+      (continuar MVP polish vs design partner outreach).
+
+quality_signals_for_merge_decision:
+  positive:
+    - "CI 7/7 verde primeira tentativa em Phase 2"
+    - "Zero failures mascaradas pelo continue-on-error"
+    - "Vitest 37/37 (no regression)"
+    - "18 E2E tests passing (9 active × 2 browsers)"
+    - "Lighthouse mantém threshold (Performance + a11y)"
+    - "Real bugs surfaced + tracked transparentemente"
+    - "Story totalmente self-validated (story-dod-checklist mental)"
+  caveats:
+    - "MNT-A11Y-001 ainda open (P1) — fix simples próxima story"
+    - "MNT-DEVOPS-001 ainda open (P1) — CodeRabbit GitHub App pra próxima story"
+    - "10 test.fixme() em 5 specs — happy-path covered, expansão futura"
+
+suggested_command: "Confirmar com Founder: 'merge?' → executar `gh pr merge 30 --squash --delete-branch`"

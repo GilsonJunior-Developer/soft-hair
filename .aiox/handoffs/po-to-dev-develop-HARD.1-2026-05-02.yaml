@@ -1,0 +1,95 @@
+from_agent: po
+to_agent: dev
+last_command: validate-story-draft
+story: "HARD.1"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/HARD.1.story.md"
+  story_status: "Ready"
+  validation_report: "docs/qa/po-validation-HARD.1-2026-05-01.md"
+  source_handoffs:
+    - "po-to-sm-hardening-sprint-2026-04-29.yaml"
+    - "sm-to-po-validate-HARD.1-2026-05-01.yaml"
+
+validation_result:
+  verdict: GO
+  readiness_score: 10
+  confidence: high
+  blockers: []
+
+executor_assignment:
+  primary: "@dev"
+  quality_gate: "@qa"
+  co_owns_AC5_workflows: "@devops"
+
+recommended_dev_mode: interactive
+  reason: |
+    Complexity=High and this is the first E2E suite in the project — no internal
+    precedent. Interactive mode safer than YOLO for the fixture pattern + CI gating
+    decisions. YOLO acceptable IF @dev has high-confidence Playwright background.
+
+prerequisites_to_resolve_before_starting:
+  - id: PREREQ-TEST-USER
+    severity: medium
+    blocker_for: "Task 2.2 (seed fixtures end-to-end)"
+    description: |
+      Test user em softhair-dev precisa ser criado: e2e+test@softhair.com com
+      salon mínimo (3 services + 2 professionals + 3 clients). @dev coordena
+      com Founder. Tasks 1, 8, 9, 10 podem rodar em paralelo sem este pré-req.
+    owner: Founder
+
+  - id: PREREQ-SUPABASE-SERVICE-ROLE
+    severity: low
+    blocker_for: "Task 2.2 seed pattern (option Service Role)"
+    description: |
+      Confirmar SUPABASE_SERVICE_ROLE_KEY presente em CI secrets (GitHub
+      Actions). Se ausente, fallback para API mock OU pre-baked DB snapshot.
+      Verificar com @devops antes de Task 2.2.
+    owner: "@devops"
+
+key_design_decisions_already_made_no_need_to_revisit:
+  - "Story ID = HARD.1 (cross-epic track) — final, do not propose 2.8"
+  - "Chromium + Webkit only (no Edge/Firefox) — out-of-scope per handoff"
+  - "data-testid selectors only (zero waitForTimeout)"
+  - "continue-on-error: true em E2E job na 1ª semana — MUST remove after stability"
+  - "engines.node: >=22.0.0 floor MAINTAINED, CI pinned to Node 24"
+
+flags_for_dev_attention:
+  - "Task 1.1: `^1.4x` and `^4.x` are not valid semver — resolve to actual semver at install (e.g., ^1.49.0). PO judgment: standard @dev call, not blocker."
+  - "Task 9.1: action versions (checkout/setup-node/pnpm-action-setup) MUST be re-checked at execution time via gh api — releases may have shipped between 2026-04-29 (handoff) and now."
+  - "Task 11.4: PO will re-confirm 7 backlog items move to `done` during *close-story — @dev mark them in story File List, PO closes the loop."
+  - "Lighthouse CI relationship — worth 1 sentence in docs/testing/e2e.md (Task 10) explaining axe-core (per-route a11y) vs Lighthouse (global Performance + Accessibility ≥ 95). Not blocking."
+
+backlog_items_pending_close_via_this_story:
+  - "1.5-TEST-001 → done"
+  - "1.6-TEST-001 → done"
+  - "1.7-TEST-001 → done"
+  - "1.7-TEST-002 → done"
+  - "2.4-TEST-001 → done"
+  - "2.5-TEST-001 → done"
+  - "2.5-INFRA-001 → done"
+  total_p0_resolved_on_close: 7
+
+new_backlog_items_added_during_validation:
+  - id: MNT-CONFIG-001
+    severity: low
+    priority: P2
+    owner: "@architect"
+    description: "core-config.yaml#architectureSharded desync"
+    blocks_HARD_1: false
+
+  - id: MNT-CONFIG-002
+    severity: low
+    priority: P2
+    owner: "@aiox-master"
+    description: "coderabbit_integration block absent from core-config.yaml"
+    blocks_HARD_1: false
+
+suggested_command: "*develop HARD.1"
+
+after_dev_completion:
+  next_agent: "@qa"
+  next_command: "*review HARD.1"
+  alternative: "@dev *apply-qa-fixes (if QA returns REJECT)"

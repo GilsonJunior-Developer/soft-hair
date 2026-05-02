@@ -1,0 +1,116 @@
+from_agent: po
+to_agent: sm
+last_command: close-story
+story: "next"
+timestamp: "2026-04-29T00:00:00Z"
+consumed: true
+
+context:
+  decision: "Founder escolheu Caminho 1 (hardening sprint) pós-fechamento Epic 2. Confirmado em 2026-04-29 após handoff devops-to-po-close-2.5."
+  rationale: |
+    Epic 2 fechou 100% sem cobertura E2E. Memory documenta regressões "indetectáveis em
+    manual" (Zod 4 datetime breaking, REVOKE PUBLIC bug) só pegas via DB validation
+    pós-apply ou hotfix same-day. E2E é a próxima camada lógica anti-regressão.
+    Adicionalmente, 2.5-INFRA-001 tem deadline rígida (2026-06-02 = Node 20 forced
+    upgrade) que naturalmente pareia com o sprint de hardening.
+  why_one_sprint:
+    - "Setup único Playwright + axe-core cobre 5 stories de uma vez (1.5/1.6/1.7/2.4/2.5)"
+    - "Workflows update do Node 20 é mecânico — não compete por tempo de produto"
+    - "Sprint hardening agora cria template E2E pra Epic 3 (WhatsApp) — dívida zero ao iniciar Epic 3"
+
+scope_recommendation:
+  approach: "Single hardening story (mini-épico de tooling/qualidade), não múltiplas stories pequenas"
+  rationale: |
+    Os 7 items são fortemente acoplados — vão dividir o mesmo setup, mesmas configs,
+    mesmo CI workflow. Múltiplas stories criariam overhead de coordenação sem benefício.
+    Trate como UMA story chunky com Tasks múltiplas (8-12 tasks).
+
+  suggested_story_id: "HARD.1 ou 2.8"
+  suggested_story_title: "Hardening sprint pré-Epic 3 — E2E Playwright + axe-core + Node 20 update"
+
+  acceptance_criteria_draft:
+    - id: AC1
+      desc: "Playwright runner instalado e configurado em apps/web/e2e/ (chromium + webkit, headless em CI, headed em local)"
+    - id: AC2
+      desc: "axe-core integrado nas specs Playwright (assertNoViolations) — target 0 critical violations"
+    - id: AC3
+      desc: "5 specs E2E cobrindo happy path + edge cases (1.5 prof CRUD, 1.6 service CRUD, 1.7 dashboard hoje, 2.4 self-booking ≤60s, 2.5 client lista→detail→notes→soft-delete)"
+    - id: AC4
+      desc: "GitHub Actions workflow `e2e.yml` rodando em PRs (matrix Chromium + Webkit, video on failure, artifacts upload)"
+    - id: AC5
+      desc: "Workflows existentes atualizados de Node 20 → Node 24 (actions/checkout@v5, actions/setup-node@v5, pnpm/action-setup@v5 — verificar versions disponíveis)"
+    - id: AC6
+      desc: "Workflow runs verde em CI antes do merge"
+    - id: AC7
+      desc: "Documentation: docs/testing/e2e.md com como rodar local + como debugar specs flaky + setup de seed data"
+
+  tasks_skeleton:
+    - "Task 1: Install + configure Playwright (playwright.config.ts, deps via pnpm, .gitignore artifacts)"
+    - "Task 2: Setup E2E infra — auth helper (login as test user), seed data fixtures, cleanup hooks"
+    - "Task 3: Spec 1.5 — professional-crud.spec.ts (create/edit/soft-delete) + axe-core assertions"
+    - "Task 4: Spec 1.6 — service-crud.spec.ts (create with duration/price boundaries)"
+    - "Task 5: Spec 1.7 — dashboard-hoje.spec.ts (empty state + populated state)"
+    - "Task 6: Spec 2.4 — self-booking.spec.ts (3-step flow, <60s assertion, LGPD checkbox)"
+    - "Task 7: Spec 2.5 — clients.spec.ts (list→search→detail→notes→soft-delete)"
+    - "Task 8: GitHub Actions — e2e.yml workflow + integrate com pr-automation"
+    - "Task 9: Update workflows existentes de Node 20 → Node 24 (lint+typecheck+test+build, lighthouse)"
+    - "Task 10: docs/testing/e2e.md"
+    - "Task 11: Smoke run em CI + ajuste de timing/retry se flaky"
+
+  out_of_scope_for_this_sprint:
+    - "Visual regression (Percy, Chromatic) — overkill para MVP"
+    - "Cross-browser além de Chromium + Webkit — Edge/Firefox podem entrar em fase 2"
+    - "Performance testing além do Lighthouse CI já existente"
+    - "Mobile device emulation profunda — ficar na config padrão Playwright (responsive viewport)"
+
+backlog_items_consumed:
+  promoted_to_p0:
+    - id: "1.5-TEST-001"
+      from: "P1"
+    - id: "1.6-TEST-001"
+      from: "P1"
+    - id: "1.7-TEST-001"
+      from: "P1"
+    - id: "1.7-TEST-002"
+      from: "P1"
+    - id: "2.4-TEST-001"
+      from: "P1"
+    - id: "2.5-TEST-001"
+      from: "P2"
+    - id: "2.5-INFRA-001"
+      from: "P1"
+  total: 7
+
+  upon_story_close_mark_done:
+    - "1.5-TEST-001 → done"
+    - "1.6-TEST-001 → done"
+    - "1.7-TEST-001 → done"
+    - "1.7-TEST-002 → done"
+    - "2.4-TEST-001 → done"
+    - "2.5-TEST-001 → done"
+    - "2.5-INFRA-001 → done"
+
+prerequisites:
+  - "Founder executar `pnpm dlx playwright install --with-deps` localmente uma vez (browsers download)"
+  - "Confirmar GitHub Actions runner suporta Playwright (já suporta — atual ubuntu-latest)"
+  - "Definir test user em softhair-dev (auth.users + public.users + salons + service catalog mínimo) — pode ser reusar fixture do Founder ou criar novo"
+
+risks_to_call_out_in_story:
+  - id: RISK-FLAKY
+    desc: "E2E specs são notoriously flaky. Mitigation: usar data-testid attributes em vez de text/CSS selectors, retries: 2 em CI, network idle waits."
+  - id: RISK-TIMING-2_4
+    desc: "Spec 2.4 tem assert de timing ≤60s — pode ser flaky em CI sob carga. Considerar usar AbortSignal para cap mais alto em CI (90s) com warning quando passar de 60s."
+  - id: RISK-NODE-24-BREAK
+    desc: "Atualização Node 20→24 pode quebrar dependências. Validar em sprint, não em main."
+
+success_criteria:
+  - "Sprint dura 1-2 sprints (3-7 dias dev), não mais"
+  - "Cobertura E2E não substitui unit tests existentes — complementa"
+  - "Zero regressões introduzidas (current 37 unit tests permanecem verde)"
+  - "CI gate adicionado mas com fallback (continue-on-error: true) se flakiness inicial bloquear merges legítimos — REMOVER fallback após 1 semana de estabilidade"
+
+next_decisions_for_after:
+  - "Após hardening done: iniciar Epic 3 (WhatsApp) ou pause MVP pra design-partner #1"
+  - "Avaliar se vale criar story 'observability' antes de Epic 3 (logs estruturados, error tracking) — pareia com migração de Resend pra fire-and-forget (2.4-PERF-001)"
+
+suggested_command: "@sm *draft (hardening story)"

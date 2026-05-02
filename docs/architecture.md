@@ -212,6 +212,8 @@ Esta é a seleção DEFINITIVA. Todas as stories devem usar exatamente essas ver
 | **CI/CD** | GitHub Actions | — | Lint + test + deploy | Free para projetos públicos; privado tem free tier |
 | **Secrets** | Vercel env vars + Supabase Vault | — | API keys, tokens | Criptografia em repouso |
 
+> 📘 **Testing reference:** see [`docs/testing/e2e.md`](./testing/e2e.md) for the Playwright + axe-core setup, conventions (`data-testid`, `domcontentloaded`, axe-on-every-spec), and CI integration. Framework landed via Story `HARD.1` (2026-05-02).
+
 ---
 
 ## Data Models
