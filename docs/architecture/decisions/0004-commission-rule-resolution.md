@@ -161,3 +161,50 @@ Rejected because integer cents math suffices for a percent × BRL price domain
 - @po validation handoff: `.aiox/handoffs/po-to-dev-develop-4.1-2026-05-02.yaml`
 - Engine code: `apps/web/lib/commission/`
 - Architecture monolithic: `docs/architecture.md` lines 86, 161-163
+
+---
+
+## Story 4.2 Implementation Notes (amended 2026-05-02)
+
+Story 4.2 (Commission Calculation on Service Completion) is the **first writer** to `commission_entries`. The following decisions were made during 4.2 implementation, formalized here for traceability:
+
+### Writer is Server Action, NOT plpgsql trigger or RPC extension
+
+- **Decision:** Commission insertion happens in `apps/web/app/(dashboard)/agenda/actions.ts::calculateAndPersistCommission`, called inline at the end of `transitionAppointmentStatus` when the target status is `COMPLETED`.
+- **Why:** Keeps the canonical engine (this ADR's `resolveRate` + `calculateCommission`) in JS. A plpgsql port would duplicate the math, lose vitest testability, and inflate the migration footprint.
+- **Trade-off accepted:** The status transition (RPC) and commission insert are not in the same DB transaction. If the insert fails after the status change, we get a "ghost" appointment without a commission row. Recovery: the insert is idempotent (UNIQUE on `appointment_id` + `upsert(...{ignoreDuplicates:true})`), and structured logging makes gaps grep-able for future backfill.
+
+### Idempotency strategy
+
+- **Mechanism:** `INSERT ... ON CONFLICT (appointment_id) DO NOTHING` via supabase-js `.upsert(rows, { onConflict: 'appointment_id', ignoreDuplicates: true })`.
+- **Guarantees:** Calling COMPLETED twice (e.g., user double-clicks) does NOT create a duplicate row. The first insert wins; subsequent attempts are no-ops.
+- **AC5 alignment:** `ignoreDuplicates: true` means we never overwrite an existing commission_entry — even if the rule changed between attempts, the original snapshot stands.
+
+### Transition vs commission boundary
+
+- **Status update is authoritative.** If the commission insert fails (engine throw, DB error, missing inputs), `transitionAppointmentStatus` still returns `{ ok: true }`. The appointment is officially `COMPLETED` from the user's perspective; the commission row is derived data that can be reconciled later.
+- **Structured logging mandatory:** every commission failure logs `console.error('[transitionAppointmentStatus][commission]', { appointmentId, reason })`. This was a mandatory caveat from @po validation 2026-05-02, designed to make divergences grep-able.
+- **Future work:** if the failure mode bites in production, a backfill job could re-process appointments where `appointments.commission_calculated_brl IS NULL AND status = 'COMPLETED'`.
+
+### Denormalized read field (`appointments.commission_calculated_brl`)
+
+- **Why duplicated:** `commission_entries.commission_amount_brl` is the source of truth, but the agenda card read path benefits from a single-column lookup without JOIN. Story 4.2 writes BOTH locations atomically (in the same Server Action) on the COMPLETED transition.
+- **AC5 still holds:** `appointments.commission_calculated_brl` is set ONCE per appointment lifecycle (at COMPLETED transition). No subsequent code path updates it. Verified by grep: `grep -rn 'commission_calculated_brl' apps/web/` shows only the single writer in `agenda/actions.ts` and read sites.
+
+### `data_atendimento` mapping (PRD AC2)
+
+PRD AC2 lists `data_atendimento` as a required field. **No new column was added.** Instead, the mapping resolves via JOIN: `commission_entries.appointment_id → appointments.scheduled_at`. The `appointments.scheduled_at` is the canonical "when the service was rendered" time (vs `commission_entries.created_at` which records when calc happened — those can differ if staff marks COMPLETED late). Story 4.3 monthly report will need this JOIN regardless for client name + service name; denormalizing into `commission_entries` would add maintenance cost without read benefit.
+
+### Test coverage added in 4.2
+
+- 14 new vitest scenarios in `apps/web/app/(dashboard)/agenda/actions.test.ts`:
+  - 5 precedence permutations (PERCENT_FIXED + override; TABLE + entry; TABLE fallback to override; TABLE fallback to default)
+  - AC4 discount path (price_brl_final used, not price_brl_original)
+  - Idempotency (upsert + ignoreDuplicates flag verified)
+  - Non-COMPLETED transitions skip commission flow
+  - Engine fetch failure → structured log + transition still returns ok
+  - Insert failure → structured log + transition still returns ok
+  - RPC error → no commission flow at all
+  - **AC5 immutability (rejection-grade behavioral test):** mock production code never exposes `update` for commission_entries; rule edit after COMPLETED does NOT trigger recompute (verified via second invalid_transition call).
+
+The structural grep `grep -r 'UPDATE.*commission_entries\|.update.*commission_entries' apps/web/` continues to return 0 matches after Story 4.2.

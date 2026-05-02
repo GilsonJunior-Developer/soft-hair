@@ -5,13 +5,14 @@ import type { CalculateInput, CalculateResult } from './types';
  * commission percent.
  *
  * Math (avoiding float drift):
- *   amount_cents = round(price_brl * 100 * percent)        // integer cents × 100
- *   amount_brl   = amount_cents / 10000                    // back to BRL with 2dp
+ *   priceInCents      = round(price_brl * 100)
+ *   commissionInCents = round(priceInCents * percent / 100)
+ *   amount_brl        = commissionInCents / 100
  *
- * Equivalent to: round(price * percent) / 100, but guarantees we never lose
- * precision on inputs like 33.33% × R$ 9.97. Uses HALF_UP rounding (Math.round
- * in JS rounds 0.5 toward +Infinity for positive numbers, which is what we want
- * for fractional cents in commission).
+ * Two-step rounding via integer cents guarantees we never lose precision on
+ * inputs like 33.33% × R$ 9.97. Uses HALF_UP rounding (Math.round in JS rounds
+ * 0.5 toward +Infinity for positive numbers, which is what we want for
+ * fractional cents in commission).
  *
  * Pure function. Caller is responsible for passing the already-discounted price
  * (`appointments.price_brl_final`, not `price_brl_original`) — see Story 4.1

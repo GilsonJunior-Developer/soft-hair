@@ -1,0 +1,142 @@
+from_agent: po
+to_agent: dev
+last_command: validate-story-draft
+story: "4.2"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.2.commission-calculation-on-completion.md"
+  story_id: "4.2"
+  story_title: "Commission Calculation on Service Completion"
+  source_handoff: ".aiox/handoffs/sm-to-po-validate-4.2-2026-05-02.yaml"
+  status_when_handed_off: "Ready"
+
+validation_summary:
+  verdict: GO
+  implementation_readiness_score: 10
+  confidence_level: HIGH
+  ten_point_checklist_score: "10/10 (after flag resolution)"
+  blocking_issues: []
+  should_fix_issues: []
+  nice_to_haves:
+    - "Optional E2E spec (commission-completion.spec.ts) — story marks as non-blocking; can be follow-up like 4.1-TEST-002"
+    - "Consider extracting formatBrl helper to shared lib if Task 2.2 adds a 3rd usage (currently 2: simulator + dialog)"
+
+flags_resolved_by_po:
+  - id: "FLAG-WORKER-VS-ACTION"
+    severity: medium
+    resolution: "Option B (Server Action post-RPC) APPROVED."
+    rationale: |
+      (i) No queue infra (Inngest = Phase 2 territory); (ii) JS engine
+      preserves testability without DB mocks; (iii) AC5 immutability
+      satisfied by engine purity, not by transaction atomicity; (iv) UNIQUE
+      constraint on commission_entries.appointment_id provides idempotency
+      structurally; (v) failure mode (commission insert fails after status
+      change) is recoverable via future backfill — transition is source of
+      truth, commission is derived data.
+    mandatory_caveat: |
+      Task 1.6 MUST use structured logging:
+      `console.error('[transitionAppointmentStatus][commission]',
+       { appointmentId, reason: err.message ?? 'unknown' })`
+      Rationale: enables grep-based gap detection for reconciliation if
+      the failure mode bites in production.
+
+  - id: "FLAG-AC5-MULTI-SERVICE"
+    severity: low
+    resolution: "SM interpretation (test matrix of service types) APPROVED."
+    rationale: |
+      Schema is 1:1 (`appointments.service_id` is single UUID). Forcing
+      multi-service per appointment would require schema redesign + UI
+      rewrite — epic-level scope. PRD wording was likely emphasizing
+      "engine handles diverse service rates" which the test matrix covers
+      (PERCENT_FIXED + service_override + TABLE entries across multiple
+      service categories).
+
+  - id: "FLAG-CARRY-OVER-BUNDLING"
+    severity: low
+    resolution: "APPROVED — Tasks 5 + 3.4 absorb 4.1-DOC-001 + 4.1-TEST-001."
+    rationale: |
+      4.1-DOC-001 (jsdoc fix in calculate.ts) — same file Story 4.2 imports
+      from; 2-min fix with same review context. 4.1-TEST-001 (Server Action
+      integration tests for commission actions) — same testing harness as
+      Story 4.2's new tests; same Supabase mock pattern. Bundling saves
+      context switch. 4.1-MNT-001 (panel DRY refactor) stays separate
+      because it touches existing 4.1 UI, not 4.2's new code.
+
+  - id: "FINDING-AC2-DATA-ATENDIMENTO"
+    severity: low
+    note: "Not a blocking flag — additional clarity added during validation"
+    resolution: "AC2 `data_atendimento` mapped via JOIN to `appointments.scheduled_at`, NOT new column."
+    rationale: |
+      `commission_entries.created_at` (existing) records WHEN the calc
+      happened (= COMPLETED transition time), which can drift from when the
+      service was rendered if staff marks COMPLETED late. The canonical
+      service date is `appointments.scheduled_at`; queries should JOIN to
+      get it. Story 4.3 (monthly report) will need the JOIN anyway for
+      client name + service name. Denormalizing into commission_entries
+      adds maintenance cost without read benefit.
+
+priority_validation_checks:
+  - "AC1 — confirm 'worker' interpretation as Server Action approved + structured logging implemented"
+  - "AC2 — verify all 5 commission_entries fields populated + data_atendimento via JOIN documented"
+  - "AC3 — confirm display location (dialog) chosen over card; precedent for action buttons"
+  - "AC4 — discount handling via price_brl_final (NOT price_brl_original) — verified in Task 1.3"
+  - "AC5 — test matrix coverage approved + rejection-grade immutability test (Task 4) is mandatory"
+
+prerequisites_called_out_in_story:
+  - "Engine 4.1 already merged to main (`55e8662`); import canonical resolveRate + calculateCommission"
+  - "Existing actions.test.ts pattern in clientes/actions.test.ts:51 (vi.mock supabase) — verified"
+  - "transitionAppointmentStatus at agenda/actions.ts:321 — verified"
+  - "Branch creation: feature/4.2-commission-calculation-on-completion (@sm OR @dev creates at *develop start)"
+
+mandatory_quality_gates:
+  pre_commit_dev:
+    - "pnpm lint && pnpm typecheck && pnpm --filter @softhair/web test passes"
+    - "0 regression on 63 baseline tests"
+    - "All new vitest scenarios pass (~10 new from Tasks 3-4)"
+    - "AC5 immutability rejection-grade test (Task 4) passes — this is the test deferred from 4.1 to 4.2"
+    - "grep -r 'UPDATE.*commission_entries' apps/web/ returns ZERO matches (mirror of 4.1 verification)"
+  pre_pr_devops:
+    - "pnpm test:e2e Chromium + Webkit matrix passes (HARD.1 baseline 5 specs preserved)"
+    - "CodeRabbit review focus: idempotency + numeric handling + RLS read paths"
+  pre_deployment:
+    - "N/A — zero schema changes, zero infra changes (only code + tests)"
+
+acceptance_criteria_status_at_handoff:
+  - ac: 1
+    status: "Greenfield — wire engine in Server Action (Option B approved); MUST include structured logging per @po caveat"
+  - ac: 2
+    status: "Greenfield insert — 5 explicit fields + data_atendimento via JOIN (no new column)"
+  - ac: 3
+    status: "Greenfield UI — display in AppointmentDetailDialog when status=COMPLETED + commission_calculated_brl != null"
+  - ac: 4
+    status: "Engine contract from 4.1 already correct — caller must pass price_brl_final (Task 1.3)"
+  - ac: 5
+    status: "9 vitest scenarios (Task 3.3) + rejection-grade integration test (Task 4) + structural grep (Task 4.3)"
+
+execution_mode_recommendation: |
+  Recommend YOLO mode given the strong precedent set by Story 4.1:
+    - All schema dependencies satisfied (no DDL)
+    - Engine contract stable (no math)
+    - Single Server Action extension + single UI tweak
+    - Clear test scenarios pre-listed
+    - 4.1 sucessfully YOLO'd in same session
+
+  Interactive mode acceptable if @dev wants to pause-and-confirm at the
+  structured-logging implementation or AC5 rejection-grade test design.
+
+constitutional_compliance:
+  - "Article IV (No Invention): Story content traces to PRD Epic 4 lines 23-31 + ADR-0004 + Story 4.1 commit ref."
+  - "Authority: @po validated + promoted Draft → Ready. @dev now authorized for *develop."
+  - "IDS Article IV-A: REUSE applied (engine 4.1 canonical, NO duplication). ADAPT applied (extend transitionAppointmentStatus). CREATE only the new tests + ADR amendment."
+
+next_workflow_step: |
+  @dev runs *develop 4.2:
+    1. Create feature branch feature/4.2-commission-calculation-on-completion
+    2. Status Ready → InProgress
+    3. Execute Tasks 1-6 in order (Task 7 optional)
+    4. After all tasks done + pre-commit gate passes → Status InProgress → InReview
+    5. Hand to @qa via *review or *qa-gate
+
+suggested_command: "*develop 4.2"

@@ -5,6 +5,9 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { normalizePhoneBR } from '@/lib/phone';
 import type { AppointmentStatus } from '@/lib/appointment-state';
+import { resolveRate } from '@/lib/commission/resolve-rate';
+import { calculateCommission } from '@/lib/commission/calculate';
+import type { CommissionMode } from '@/lib/commission/types';
 
 /* ----------------------------------------------------------
  * Result shape (consistent with Epic 1 actions)
@@ -24,6 +27,8 @@ export type AgendaAppointment = {
   endsAt: string;
   status: AppointmentStatus;
   priceFinalBrl: number;
+  /** Story 4.2 — populated when status=COMPLETED via transitionAppointmentStatus snapshot */
+  commissionCalculatedBrl: number | null;
   client: { id: string; name: string; phone: string } | null;
   professional: { id: string; name: string };
   service: { id: string; name: string; durationMinutes: number };
@@ -41,6 +46,7 @@ type AppointmentFlatRow = {
   ends_at: string;
   status: AppointmentStatus;
   price_brl_final: number | string;
+  commission_calculated_brl: number | string | null;
   client_id: string;
   professional_id: string;
   service_id: string;
@@ -65,7 +71,7 @@ export async function fetchAgendaWindow({
   let query = supabase
     .from('appointments')
     .select(
-      'id, scheduled_at, ends_at, status, price_brl_final, client_id, professional_id, service_id',
+      'id, scheduled_at, ends_at, status, price_brl_final, commission_calculated_brl, client_id, professional_id, service_id',
     )
     .gte('scheduled_at', from.toISOString())
     .lt('scheduled_at', to.toISOString())
@@ -152,6 +158,10 @@ export async function fetchAgendaWindow({
     endsAt: r.ends_at,
     status: r.status,
     priceFinalBrl: Number(r.price_brl_final),
+    commissionCalculatedBrl:
+      r.commission_calculated_brl !== null
+        ? Number(r.commission_calculated_brl)
+        : null,
     client: clientById.get(r.client_id) ?? null,
     professional:
       proById.get(r.professional_id) ?? { id: r.professional_id, name: '—' },
@@ -351,6 +361,14 @@ export async function transitionAppointmentStatus(
     return { ok: false, error: 'Erro ao atualizar status' };
   }
 
+  // Story 4.2 — Commission calculation on COMPLETED transition.
+  // Best-effort: log structured error on failure but do NOT roll back the
+  // status change. Transition is source of truth; commission is derived data
+  // and recoverable via future backfill if this insert fails.
+  if (parsed.data.to === 'COMPLETED') {
+    await calculateAndPersistCommission(supabase, parsed.data.appointmentId);
+  }
+
   revalidatePath('/agenda');
   revalidatePath('/hoje');
   const updated = data as { status: AppointmentStatus } | null;
@@ -358,4 +376,135 @@ export async function transitionAppointmentStatus(
     ok: true,
     data: { status: updated?.status ?? parsed.data.to },
   };
+}
+
+/* ----------------------------------------------------------
+ * calculateAndPersistCommission — Story 4.2
+ * Best-effort writer; never throws. Logs structured error on failure
+ * for grep-based gap detection (per @po validation caveat).
+ * ----------------------------------------------------------*/
+
+type CommissionInputRow = {
+  salon_id: string;
+  professional_id: string;
+  service_id: string;
+  price_brl_final: number | string;
+  professionals: {
+    commission_mode: CommissionMode;
+    commission_default_percent: number | string;
+  } | null;
+  services: {
+    commission_override_percent: number | string | null;
+  } | null;
+};
+
+async function calculateAndPersistCommission(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  appointmentId: string,
+): Promise<void> {
+  try {
+    // Fetch appointment + professional + service in a single query.
+    const { data: row, error: fetchErr } = await supabase
+      .from('appointments')
+      .select(
+        `
+        salon_id,
+        professional_id,
+        service_id,
+        price_brl_final,
+        professionals!inner(commission_mode, commission_default_percent),
+        services!inner(commission_override_percent)
+      `,
+      )
+      .eq('id', appointmentId)
+      .maybeSingle<CommissionInputRow>();
+
+    if (fetchErr || !row || !row.professionals || !row.services) {
+      console.error('[transitionAppointmentStatus][commission]', {
+        appointmentId,
+        reason: fetchErr?.message ?? 'inputs_missing',
+      });
+      return;
+    }
+
+    // Conditional: TABLE-mode professionals may have a per-service override entry.
+    let tableEntry: { percent: number } | null = null;
+    if (row.professionals.commission_mode === 'TABLE') {
+      const { data: entry } = await supabase
+        .from('professional_service_commissions')
+        .select('percent')
+        .eq('professional_id', row.professional_id)
+        .eq('service_id', row.service_id)
+        .maybeSingle();
+
+      if (entry) {
+        tableEntry = { percent: Number(entry.percent) };
+      }
+    }
+
+    // Resolve rate via canonical engine (Story 4.1).
+    const { percentApplied } = resolveRate({
+      professional: {
+        commissionMode: row.professionals.commission_mode,
+        commissionDefaultPercent: Number(
+          row.professionals.commission_default_percent,
+        ),
+      },
+      service: {
+        commissionOverridePercent:
+          row.services.commission_override_percent !== null
+            ? Number(row.services.commission_override_percent)
+            : null,
+      },
+      tableEntry,
+    });
+
+    // Calculate commission on the post-discount price (AC4).
+    const servicePriceBrl = Number(row.price_brl_final);
+    const { commissionAmountBrl } = calculateCommission({
+      servicePriceBrl,
+      percentApplied,
+    });
+
+    // Idempotent insert via upsert+ignoreDuplicates (UNIQUE on appointment_id).
+    const { error: insertErr } = await supabase
+      .from('commission_entries')
+      .upsert(
+        {
+          salon_id: row.salon_id,
+          appointment_id: appointmentId,
+          professional_id: row.professional_id,
+          service_price_brl: servicePriceBrl,
+          percent_applied: percentApplied,
+          commission_amount_brl: commissionAmountBrl,
+        },
+        { onConflict: 'appointment_id', ignoreDuplicates: true },
+      );
+
+    if (insertErr) {
+      console.error('[transitionAppointmentStatus][commission]', {
+        appointmentId,
+        reason: insertErr.message,
+      });
+      return;
+    }
+
+    // Fast-read denormalization on appointments. Single write — AC5 holds.
+    const { error: updateErr } = await supabase
+      .from('appointments')
+      .update({ commission_calculated_brl: commissionAmountBrl })
+      .eq('id', appointmentId);
+
+    if (updateErr) {
+      console.error('[transitionAppointmentStatus][commission]', {
+        appointmentId,
+        reason: `update_appointment_failed:${updateErr.message}`,
+      });
+    }
+  } catch (err) {
+    console.error('[transitionAppointmentStatus][commission]', {
+      appointmentId,
+      reason: err instanceof Error ? err.message : 'unknown',
+    });
+  }
 }
