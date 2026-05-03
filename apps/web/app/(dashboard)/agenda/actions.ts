@@ -379,62 +379,79 @@ export async function transitionAppointmentStatus(
 }
 
 /* ----------------------------------------------------------
- * calculateAndPersistCommission — Story 4.2
+ * calculateAndPersistCommission — Story 4.2 (hotfix 2026-05-03)
  * Best-effort writer; never throws. Logs structured error on failure
  * for grep-based gap detection (per @po validation caveat).
+ *
+ * Hotfix history: initial implementation used PostgREST embedded resources
+ * (`professionals!inner(...)`) which silently returned wrong shape in
+ * production (5 COMPLETED appointments left without commission rows).
+ * Rewritten to 3 separate queries matching the team convention from
+ * `fetchAgendaWindow` lines 110-120 ("more defensive against introspection
+ * edge cases; resolve relations below with targeted IN queries").
  * ----------------------------------------------------------*/
-
-type CommissionInputRow = {
-  salon_id: string;
-  professional_id: string;
-  service_id: string;
-  price_brl_final: number | string;
-  professionals: {
-    commission_mode: CommissionMode;
-    commission_default_percent: number | string;
-  } | null;
-  services: {
-    commission_override_percent: number | string | null;
-  } | null;
-};
 
 async function calculateAndPersistCommission(
   supabase: Awaited<ReturnType<typeof createClient>>,
   appointmentId: string,
 ): Promise<void> {
   try {
-    // Fetch appointment + professional + service in a single query.
-    const { data: row, error: fetchErr } = await supabase
+    // Step 1: fetch appointment alone (no embed).
+    const { data: appt, error: apptErr } = await supabase
       .from('appointments')
-      .select(
-        `
-        salon_id,
-        professional_id,
-        service_id,
-        price_brl_final,
-        professionals!inner(commission_mode, commission_default_percent),
-        services!inner(commission_override_percent)
-      `,
-      )
+      .select('salon_id, professional_id, service_id, price_brl_final')
       .eq('id', appointmentId)
-      .maybeSingle<CommissionInputRow>();
+      .maybeSingle();
 
-    if (fetchErr || !row || !row.professionals || !row.services) {
+    if (apptErr || !appt) {
       console.error('[transitionAppointmentStatus][commission]', {
         appointmentId,
-        reason: fetchErr?.message ?? 'inputs_missing',
+        reason: apptErr?.message ?? 'appointment_not_found',
       });
       return;
     }
 
+    // Step 2: fetch professional + service in parallel.
+    const [proRes, svcRes] = await Promise.all([
+      supabase
+        .from('professionals')
+        .select('commission_mode, commission_default_percent')
+        .eq('id', appt.professional_id)
+        .maybeSingle(),
+      supabase
+        .from('services')
+        .select('commission_override_percent')
+        .eq('id', appt.service_id)
+        .maybeSingle(),
+    ]);
+
+    if (proRes.error || !proRes.data || svcRes.error || !svcRes.data) {
+      console.error('[transitionAppointmentStatus][commission]', {
+        appointmentId,
+        reason:
+          proRes.error?.message ??
+          svcRes.error?.message ??
+          'inputs_missing',
+      });
+      return;
+    }
+
+    const professional = proRes.data as {
+      commission_mode: CommissionMode;
+      commission_default_percent: number | string;
+    };
+    const service = svcRes.data as {
+      commission_override_percent: number | string | null;
+    };
+
     // Conditional: TABLE-mode professionals may have a per-service override entry.
     let tableEntry: { percent: number } | null = null;
-    if (row.professionals.commission_mode === 'TABLE') {
+    if (professional.commission_mode === 'TABLE') {
       const { data: entry } = await supabase
         .from('professional_service_commissions')
         .select('percent')
-        .eq('professional_id', row.professional_id)
-        .eq('service_id', row.service_id)
+        .eq('professional_id', appt.professional_id)
+        .eq('service_id', appt.service_id)
         .maybeSingle();
 
       if (entry) {
@@ -445,22 +462,20 @@ async function calculateAndPersistCommission(
     // Resolve rate via canonical engine (Story 4.1).
     const { percentApplied } = resolveRate({
       professional: {
-        commissionMode: row.professionals.commission_mode,
-        commissionDefaultPercent: Number(
-          row.professionals.commission_default_percent,
-        ),
+        commissionMode: professional.commission_mode,
+        commissionDefaultPercent: Number(professional.commission_default_percent),
       },
       service: {
         commissionOverridePercent:
-          row.services.commission_override_percent !== null
-            ? Number(row.services.commission_override_percent)
+          service.commission_override_percent !== null
+            ? Number(service.commission_override_percent)
             : null,
       },
       tableEntry,
     });
 
     // Calculate commission on the post-discount price (AC4).
-    const servicePriceBrl = Number(row.price_brl_final);
+    const servicePriceBrl = Number(appt.price_brl_final);
     const { commissionAmountBrl } = calculateCommission({
       servicePriceBrl,
       percentApplied,
@@ -471,9 +486,9 @@ async function calculateAndPersistCommission(
       .from('commission_entries')
       .upsert(
         {
-          salon_id: row.salon_id,
+          salon_id: appt.salon_id,
           appointment_id: appointmentId,
-          professional_id: row.professional_id,
+          professional_id: appt.professional_id,
           service_price_brl: servicePriceBrl,
           percent_applied: percentApplied,
           commission_amount_brl: commissionAmountBrl,
