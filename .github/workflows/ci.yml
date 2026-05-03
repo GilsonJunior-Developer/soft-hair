@@ -75,6 +75,26 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # TEMP DIAGNOSTIC #2 (4.2-TEST-001 PR #34): bypass SDK with raw curl
+      # to isolate whether the failure is in @supabase/supabase-js or in the
+      # env value itself. Prints key shape + HTTP status only.
+      - name: Diagnostic — raw REST probe
+        run: |
+          echo "URL=$NEXT_PUBLIC_SUPABASE_URL"
+          echo "ANON head=${NEXT_PUBLIC_SUPABASE_ANON_KEY:0:6} tail=${NEXT_PUBLIC_SUPABASE_ANON_KEY: -4} len=${#NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+          echo "SRV  head=${SUPABASE_SERVICE_ROLE_KEY:0:6} tail=${SUPABASE_SERVICE_ROLE_KEY: -4} len=${#SUPABASE_SERVICE_ROLE_KEY}"
+          echo "--- probe with ANON key ---"
+          curl -sS -o /tmp/anon.out -w "HTTP=%{http_code}\n" \
+            "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/service_catalog?select=id&limit=1" \
+            -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          head -c 200 /tmp/anon.out; echo
+          echo "--- probe with SRV key ---"
+          curl -sS -o /tmp/srv.out -w "HTTP=%{http_code}\n" \
+            "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/professionals?select=id&limit=1" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
+          head -c 200 /tmp/srv.out; echo
       - run: pnpm test
       - run: pnpm build
 
