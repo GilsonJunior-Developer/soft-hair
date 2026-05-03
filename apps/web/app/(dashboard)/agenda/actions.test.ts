@@ -10,12 +10,14 @@ vi.mock('next/cache', () => ({
 }));
 
 /* ----------------------------------------------------------
- * Mock Supabase client — Story 4.2
- * Captures: rpc calls + select chains + upsert/update for commission flow
+ * Mock Supabase client — Story 4.2 (hotfix 2026-05-03: 3 separate queries)
+ * Captures: rpc calls + 3 separate select chains + upsert/update
  * ----------------------------------------------------------*/
 
 const mockRpc = vi.fn();
-const mockCommissionInputsMaybeSingle = vi.fn();
+const mockApptInputMaybeSingle = vi.fn(); // step 1: appointment row
+const mockProMaybeSingle = vi.fn(); // step 2a: professional row
+const mockSvcMaybeSingle = vi.fn(); // step 2b: service row
 const mockTableEntryMaybeSingle = vi.fn();
 const mockCommissionEntriesUpsert = vi.fn();
 const mockAppointmentsUpdate = vi.fn();
@@ -29,7 +31,7 @@ function buildSupabaseClient() {
         return {
           select: () => ({
             eq: () => ({
-              maybeSingle: mockCommissionInputsMaybeSingle,
+              maybeSingle: mockApptInputMaybeSingle,
             }),
           }),
           update: (...args: unknown[]) => {
@@ -38,6 +40,24 @@ function buildSupabaseClient() {
               eq: vi.fn().mockResolvedValue({ error: null }),
             };
           },
+        };
+      }
+      if (table === 'professionals') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: mockProMaybeSingle,
+            }),
+          }),
+        };
+      }
+      if (table === 'services') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: mockSvcMaybeSingle,
+            }),
+          }),
         };
       }
       if (table === 'professional_service_commissions') {
@@ -85,19 +105,25 @@ function setCommissionInputs(opts: {
   commissionDefaultPercent: number;
   commissionOverridePercent: number | null;
 }) {
-  mockCommissionInputsMaybeSingle.mockResolvedValue({
+  mockApptInputMaybeSingle.mockResolvedValue({
     data: {
       salon_id: SALON_ID,
       professional_id: PROF_ID,
       service_id: SVC_ID,
       price_brl_final: opts.priceBrlFinal,
-      professionals: {
-        commission_mode: opts.commissionMode,
-        commission_default_percent: opts.commissionDefaultPercent,
-      },
-      services: {
-        commission_override_percent: opts.commissionOverridePercent,
-      },
+    },
+    error: null,
+  });
+  mockProMaybeSingle.mockResolvedValue({
+    data: {
+      commission_mode: opts.commissionMode,
+      commission_default_percent: opts.commissionDefaultPercent,
+    },
+    error: null,
+  });
+  mockSvcMaybeSingle.mockResolvedValue({
+    data: {
+      commission_override_percent: opts.commissionOverridePercent,
     },
     error: null,
   });
@@ -105,7 +131,9 @@ function setCommissionInputs(opts: {
 
 function resetAllMocks() {
   mockRpc.mockReset();
-  mockCommissionInputsMaybeSingle.mockReset();
+  mockApptInputMaybeSingle.mockReset();
+  mockProMaybeSingle.mockReset();
+  mockSvcMaybeSingle.mockReset();
   mockTableEntryMaybeSingle.mockReset();
   mockCommissionEntriesUpsert.mockReset();
   mockAppointmentsUpdate.mockReset();
@@ -283,14 +311,14 @@ describe('transitionAppointmentStatus → commission calculation (Story 4.2)', (
 
     await transitionAppointmentStatus({ appointmentId: APPT_ID, to: 'CONFIRMED' });
 
-    expect(mockCommissionInputsMaybeSingle).not.toHaveBeenCalled();
+    expect(mockApptInputMaybeSingle).not.toHaveBeenCalled();
     expect(mockCommissionEntriesUpsert).not.toHaveBeenCalled();
     expect(mockAppointmentsUpdate).not.toHaveBeenCalled();
   });
 
   it('engine input fetch failure → logs structured error + transition still returns ok', async () => {
     setRpcSuccess('COMPLETED');
-    mockCommissionInputsMaybeSingle.mockResolvedValue({
+    mockApptInputMaybeSingle.mockResolvedValue({
       data: null,
       error: { message: 'db down' },
     });
@@ -351,7 +379,7 @@ describe('transitionAppointmentStatus → commission calculation (Story 4.2)', (
     });
 
     expect(res.ok).toBe(false);
-    expect(mockCommissionInputsMaybeSingle).not.toHaveBeenCalled();
+    expect(mockApptInputMaybeSingle).not.toHaveBeenCalled();
     expect(mockCommissionEntriesUpsert).not.toHaveBeenCalled();
   });
 });
