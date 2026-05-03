@@ -108,7 +108,7 @@ Gate: `docs/qa/gates/4.2-commission-calculation-on-completion.yml` (PASS — clo
 | ID | Severity | Priority | Status | Título | Owner |
 |---|---|---|---|---|---|
 | 4.2-OBS-001 | low | P2 | open | Race teórica entre upsert idempotente + UPDATE não-atômico em `appointments.commission_calculated_brl`. Não-explorável via supported APIs (RPC `transition_appointment_status` tem `FOR UPDATE` row-lock + state machine bloqueia re-transition de COMPLETED). Optional hardening: extrair helper para DB transaction ou RPC se divergence aparecer em prod. | @dev / @data-engineer |
-| 4.2-TEST-001 | medium | **P1** | open | **Promovido P2→P1 em 2026-05-03** após bug de PostgREST embed em prod (Story 4.2 hotfix PR #33). Mock-based tests não pegaram shape mismatch que o real DB integration test pegaria. Adicionar test que: (a) atualiza `professional.commission_default_percent` em DB real e re-query `commission_entries` pra verificar imutabilidade; (b) verifica engine consumer flow end-to-end com Supabase real (não mock) pra detectar PostgREST quirks antes de prod. Recomendado **antes de Story 4.3 mergear**. | @dev / @qa |
+| 4.2-TEST-001 | medium | **P1** | done | **Resolvido 2026-05-02.** 3 integration tests em `apps/web/integration/commission-calculation.integration.test.ts` cobrem: engine consumer flow end-to-end via real PostgREST (Coloração 60% override → R$ 90), AC5 immutability (mutar prof default % não toca snapshot), TABLE-mode + per-prof×service entry. Substitui `@/lib/supabase/server.createClient` por service-role client; usa fixture documentada em `docs/testing/e2e.md`; cleanup soft-deleta appointments + hard-deleta commission rows + restaura prof. Ativo em CI via `lint-test-build` env block. Sentinel contra a classe de bug do PR #33 (re-introduzir `!inner(...)` falha o test). | @dev / @qa |
 | 4.2-TEST-002 | low | P2 | open | Sem E2E (Playwright) coverage pra display de comissão em `AppointmentDetailDialog`. Story marca WAIVER-E2E-4.2. Bundleable com 4.1-TEST-002 (matrix + simulator E2E) num único hardening story. ~30 min pra spec: COMPLETED appointment → assert "Comissão" Row aparece. | @dev |
 | 4.2-MNT-001 | low | P2 | open | Currency formatting inline em `appointment-detail-dialog.tsx:102-109` (`.toFixed(2).replace('.', ',')`). Reuse `formatBrl` helper de `commission-simulator.tsx` no 3rd usage threshold (não atingido — 2 usos hoje). Bundleable com 4.1-MNT-001 (panel DRY) num "commission display helpers" cleanup quando Story 4.3 ou 4.4 trouxer 3rd usage. | @dev |
 
@@ -130,7 +130,7 @@ Gate: `docs/qa/gates/4.2-commission-calculation-on-completion.yml` (PASS — clo
 
 | Categoria | Abertos | Escalated | Done | Total |
 |---|---|---|---|---|
-| TEST | 5 (1 P1) | 0 | 7 | 12 |
+| TEST | 4 | 0 | 8 | 12 |
 | PERF | 2 | 1 | 1 | 4 |
 | REQ | 4 | 0 | 0 | 4 |
 | MNT | 9 | 0 | 0 | 9 |
@@ -143,7 +143,7 @@ Gate: `docs/qa/gates/4.2-commission-calculation-on-completion.yml` (PASS — clo
 | VAL | 1 | 0 | 0 | 1 |
 | INFRA | 0 | 0 | 1 | 1 |
 | DEPLOY | 1 | 0 | 0 | 1 |
-| **Total** | **33** | **1** | **11** | **45** |
+| **Total** | **32** | **1** | **12** | **45** |
 
 ### Itens pareados (setup único resolve múltiplos)
 
@@ -170,7 +170,7 @@ Conjunto coeso pra um sprint único de hardening:
 **P1 — próximo sprint geral:**
 - ~~**4.1-DOC-001**~~ ✅ **DONE 2026-05-02** via Story 4.2 (carry-over absorbed)
 - ~~**4.1-TEST-001**~~ ✅ **DONE 2026-05-02** via Story 4.2 (carry-over absorbed)
-- **4.2-TEST-001** — promovido P2→P1 em 2026-05-03 após bug PostgREST embed (PR #33 hotfix). **Recomendado antes de Story 4.3 mergear** — mock tests não pegaram a regressão. Real DB integration test via pgtap ou Supabase MCP `execute_sql` em vitest.
+- ~~**4.2-TEST-001**~~ ✅ **DONE 2026-05-02** — 3 integration tests via service-role client em `apps/web/integration/`; ativos em CI (`lint-test-build` env block); sentinel contra PostgREST embed regression do PR #33. Unblocks Story 4.3 mergear.
 - **4.1-MNT-001** — DRY refactor (panel duplica engine logic). Bundleable com 4.2-MNT-001 num "commission display helpers" cleanup.
 - **2.4-PERF-001** — move email off critical path (pareia com o momento em que Resend for wired em prod)
 - **2.5-PERF-001** — view server-side pra aggregation quando salões cruzarem 5k clients (hoje o maior parceiro tem ~50, longe do threshold)
@@ -182,7 +182,7 @@ Conjunto coeso pra um sprint único de hardening:
 - 2.4-DATA-001, 2.4-A11Y-001, 2.4-A11Y-002, 2.4-OBS-001 — polimento pós-MVP
 - 2.5-TYPES-001, 2.5-A11Y-001, 2.5-MNT-001, 2.5-MNT-002, 2.5-VAL-001 — polimento Story 2.5 (types regen, aria-expanded refinement, setTimeout cleanup, branch cleanup, UUID pre-validation)
 - 4.1-SEC-001, 4.1-TEST-002, 4.1-DATA-001 — polimento Story 4.1 (role gating, E2E, FK consistency)
-- 4.2-OBS-001, 4.2-TEST-001, 4.2-TEST-002, 4.2-MNT-001 — polimento Story 4.2 (race teórica, AC5 integration test, E2E, formatBrl extraction)
+- 4.2-OBS-001, 4.2-TEST-002, 4.2-MNT-001 — polimento Story 4.2 (race teórica, E2E, formatBrl extraction). 4.2-TEST-001 fechado 2026-05-02.
 
 ---
 
@@ -209,3 +209,4 @@ Conjunto coeso pra um sprint único de hardening:
 | 2026-05-02 | Dex (@dev) `*develop HARD.1 yolo` Phase 2 shipped: 5 specs E2E + 2 fixtures + 12 data-testids no app + ci.yml env block. Surfaced **GoTrue NULL token panic** (gotcha + fix documented) + **MNT-A11Y-001** novo (CRITICAL select-name em /servicos). 14 active + 14 fixme = 28 tests. | Dex (@dev) |
 | 2026-05-02 | Gage (@devops) `*push` Phase 2 (commit `553cce0`) → PR #30 atualizado. **CI 7/7 verde primeira tentativa**: Lint+Test+Build 1m23s ✅ / Vitest 37/37 ✅ / E2E chromium 9 passed (1m49s) ✅ / E2E webkit 9 passed (2m2s) ✅ / Lighthouse 4m5s ✅ / Vercel deployed ✅. Zero failures masked pelo `continue-on-error: true` (verificado em logs). Artifacts uploaded. | Gage (@devops) |
 | 2026-05-02 | **HARD.1 closed via @po `*close-story`** (Path B autorizado pelo Founder: skip @qa review dado strength dos signals + precedente Stories 2.5/2.7). Status Done. **7 P0 items → done:** 1.5/1.6/1.7/2.4/2.5-TEST-001 + 1.7-TEST-002 + 2.5-INFRA-001. Resumo agregado: TEST 8→2 abertos (6→done), INFRA 1→0 abertos (1→done). Total open: 31→24, Total done: 2→9. PR #30 aguardando squash merge por @devops. | Pax (@po) |
+| 2026-05-02 | **`4.2-TEST-001` resolved (YOLO @dev)** — bundleado pré-Story 4.3 conforme Path A autorizado pelo Founder. 3 integration tests em `apps/web/integration/commission-calculation.integration.test.ts` exercitam `transitionAppointmentStatus` contra softhair-dev real via service-role client (Coloração 60% override → R$90 / AC5 immutability mutating prof default / TABLE mode entry overriding service override). Vitest baseline 77→80. CI `lint-test-build` ganhou env block pra ativar suite (também desbloqueia `packages/db` rls-smoke que estava skipando silenciosamente). Cleanup soft-deleta appointments + hard-deleta commission rows. Sentinel contra a classe de bug do PR #33 (re-introduzir `!inner(` falha visivelmente). Total open: 33→32, done: 11→12. | Dex (@dev) |
