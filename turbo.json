@@ -18,11 +18,21 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "env": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ]
     },
     "test:e2e": {
       "dependsOn": ["^build"],
-      "outputs": ["playwright-report/**", "test-results/**"]
+      "outputs": ["playwright-report/**", "test-results/**"],
+      "env": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY"
+      ]
     }
   }
 }

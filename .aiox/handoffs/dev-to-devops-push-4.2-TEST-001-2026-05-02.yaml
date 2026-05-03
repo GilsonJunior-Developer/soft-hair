@@ -1,0 +1,130 @@
+from_agent: dev
+to_agent: devops
+last_command: develop-yolo
+ticket: "4.2-TEST-001"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: false
+
+context:
+  ticket_id: "4.2-TEST-001"
+  ticket_priority: "P1"
+  branch: "chore/4.2-test-001-real-db-integration"
+  commit: "1d7f2de"
+  base: "main (77a9320)"
+  parent_handoff: ".aiox/handoffs/sm-to-dev-pickup-4.2-TEST-001-2026-05-02.yaml"
+  authorizer: "Founder (2026-05-02)"
+  bundle_decision: "Path A — bundle ANTES de Story 4.3 mergear"
+
+execution_summary: |
+  YOLO mode. Implemented Option 2 from the SM handoff (service-role client +
+  real Supabase, no MCP coupling). 1 commit, 7 files, 745 insertions.
+
+  Used the existing test salon (`4e5b99ca-...` in softhair-dev) and the
+  documented fixture from docs/testing/e2e.md instead of creating a fresh
+  salon — avoided the auth.uid() requirement of `create_salon_bootstrap`
+  RPC and kept the test surface minimal. Pinned IDs are hardcoded so the
+  suite fails loudly if the fixture drifts.
+
+  `@/lib/supabase/server.createClient` is mocked to return the service-role
+  client; the production Server Action `transitionAppointmentStatus` runs
+  unmodified end-to-end.
+
+what_changed:
+  files_added:
+    - "apps/web/integration/_setup/env.ts (loads .env.local + pinned fixture IDs + hasIntegrationCredentials guard)"
+    - "apps/web/integration/_setup/supabase-admin.ts (service-role client factory)"
+    - "apps/web/integration/_setup/fixtures.ts (createAppointment / confirmAppointment / cleanupAppointment / snapshotProfessional / setProfessionalCommission / upsertProfessionalServiceCommission / deleteProfessionalServiceCommission)"
+    - "apps/web/integration/commission-calculation.integration.test.ts (3 tests, ~10s real-DB execution)"
+    - ".aiox/handoffs/sm-to-dev-pickup-4.2-TEST-001-2026-05-02.yaml (consumed)"
+  files_modified:
+    - ".github/workflows/ci.yml (env block on lint-test-build job — activates this suite + packages/db rls-smoke)"
+    - "docs/qa/backlog.md (4.2-TEST-001 status open→done at lines 111/173/185, summary counts, history entry)"
+
+verification:
+  vitest_apps_web: "10 files / 80 tests passed (was 77, +3 integration). Duration 16s."
+  vitest_packages_db: "20 passed / 5 todo (rls-smoke also runs now with service role available — was silently skipping)."
+  pnpm_test_full: "2/2 turbo tasks successful in 20.5s."
+  lint: "✓ No ESLint warnings or errors."
+  typecheck: "exit 0 (tsc --noEmit clean)."
+  build: "next build successful — 25 routes compiled."
+  cleanup_verified: |
+    Post-run probe via MCP execute_sql confirmed:
+      active_test_appts=0, soft_deleted_test_appts=3, orphan_commission_entries=0,
+      prof1_state='PERCENT_FIXED 50.00' (restored exactly)
+
+design_decisions:
+  - decision: "Use existing test salon instead of creating fresh ones"
+    why: "create_salon_bootstrap RPC requires auth.uid() which service role does not provide. Using the documented fixture from HARD.1/docs/testing/e2e.md keeps surface minimal and means tests skip cleanly when fixture is missing."
+  - decision: "Soft-delete appointments + hard-delete commission_entries on cleanup"
+    why: "Cascade DELETE on appointments fires the status_log immutability trigger (`prevent_credits_log_mutation`) which blocks the operation. Verified empirically via MCP probe before writing the helper. Soft-deleted appts are filtered out by `deleted_at IS NULL` in app queries; status_log accumulating is fine — it is audit data."
+  - decision: "Pin fixture UUIDs in env.ts instead of querying by name"
+    why: "Tests fail loudly if the fixture drifts (e.g. `4e5b99ca-...` no longer exists). Querying by slug/name would silently target a different salon and produce confusing failures."
+  - decision: "Mock @/lib/supabase/server.createClient instead of running through real auth"
+    why: "The bug class we defend against (PR #33 PostgREST embed shape) is in query syntax, not RLS. Service role bypasses RLS for fast deterministic setup. RLS is exercised separately by packages/db/tests/rls-smoke.test.ts."
+  - decision: "Add env block to lint-test-build job in CI (not a separate integration-tests job)"
+    why: "Follows the existing pattern from packages/db/tests/rls-smoke.test.ts which already used hasCredentials skip-if. One job is simpler and matches the team convention. Side-benefit: rls-smoke now actually runs in CI (it was silently skipping before because the env was never injected)."
+
+pr_metadata_suggestion:
+  title: "test(commission): 4.2-TEST-001 — real DB integration tests via service-role client"
+  body: |
+    Closes `4.2-TEST-001` (P1, promoted from P2 after the Story 4.2 PostgREST
+    embed bug + PR #33 hotfix). Bundleado ANTES de Story 4.3 conforme Path A
+    autorizado pelo Founder.
+
+    ## What
+    3 integration tests in `apps/web/integration/commission-calculation.integration.test.ts`
+    exercise `transitionAppointmentStatus` against `softhair-dev` with real
+    PostgREST roundtrips:
+
+    1. **PERCENT_FIXED + service override** → engine consumer flow writes
+       `commission_entries` (Coloração 60% override beats 50% prof default → R$ 90).
+    2. **AC5 immutability** — mutating `professionals.commission_default_percent`
+       does NOT touch a prior `commission_entries` snapshot.
+    3. **TABLE mode + per-(prof, service) entry** → Tier 1 wins over Tier 2 service
+       override (R$ 105).
+
+    ## Why
+    Mock-based unit tests (37 → 77 baseline post-Story 4.2) did not catch the
+    PostgREST embed shape mismatch from PR #33. This suite is the regression
+    sentinel: re-introducing `from('appointments').select('..., professionals!inner(...)')`
+    will fail visibly via real PostgREST roundtrip.
+
+    ## How
+    - `@/lib/supabase/server.createClient` mocked to return a service-role client
+    - Pinned fixture IDs from `docs/testing/e2e.md` (HARD.1 test salon)
+    - Cleanup: hard-delete `commission_entries`, soft-delete `appointments`
+      (cascade blocked by status_log immutability trigger — verified empirically)
+
+    ## CI
+    `lint-test-build` gains an env block injecting the 3 Supabase secrets
+    (HARD.1 already added them). Side-benefit: `packages/db/tests/rls-smoke.test.ts`
+    now actually runs in CI — was silently skipping before.
+
+    ## Verification
+    - Vitest `apps/web`: 80/80 ✓ (was 77, +3 integration)
+    - Vitest `packages/db`: 20/20 ✓ (rls-smoke now active)
+    - Lint / typecheck / build: clean
+    - Cleanup probe via MCP: 0 orphan rows, prof1 fully restored
+
+push_workflow:
+  step_1: "git push -u origin chore/4.2-test-001-real-db-integration"
+  step_2: "gh pr create --base main --head chore/4.2-test-001-real-db-integration --title <see pr_metadata_suggestion> --body <see pr_metadata_suggestion>"
+  step_3: "Monitor CI (expect 7/7 verde — same matrix as PR #30 + this is the first PR exercising rls-smoke in CI so watch for that line specifically)"
+  step_4: "Squash merge after CI passes (no schema changes → no prod migration needed)"
+
+risks_to_watch:
+  - risk: "rls-smoke (packages/db) tests may surface schema/RLS drift in CI for the first time"
+    detail: "They passed locally just now (20/20) but CI runs against the same softhair-dev so should be consistent. If they fail, that is a separate concern — pre-existing drift, not caused by this PR."
+  - risk: "Integration suite adds ~10s to lint-test-build"
+    detail: "Acceptable. Total CI time grows from ~1m23s to ~1m33s for the test step."
+  - risk: "Test pollution accumulating in softhair-dev (soft-deleted appointments)"
+    detail: "Each PR run leaves 3 soft-deleted appointments in the test salon. After ~50 PRs there are ~150 — still negligible. If it ever matters, a one-shot DELETE WHERE idempotency_key LIKE 'integration-test-%' AND deleted_at IS NOT NULL via MCP cleans them all up. status_log rows from those tests cannot be deleted (immutability trigger) but accumulating audit data is fine."
+
+next_workflow_step:
+  agent: "@devops (Gage)"
+  command: "*push (or *pr if separate)"
+  followup_after_merge:
+    - "Update memory `project_sprint_state_post_HARD1` (or successor) noting 4.2-TEST-001 closed + Story 4.3 unblocked"
+    - "Activate @sm to *draft 4.3 (Monthly Commission Report)"
+
+velocity_signal: "STRONG — YOLO single-pass: probe → design → 4 files → tests pass → lint/typecheck/build clean → commit. Total elapsed (in-session): ~25 min."

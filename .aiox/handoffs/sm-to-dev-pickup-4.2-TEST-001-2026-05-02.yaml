@@ -1,0 +1,161 @@
+from_agent: sm
+to_agent: dev
+last_command: pickup-backlog-item
+ticket: "4.2-TEST-001"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  ticket_id: "4.2-TEST-001"
+  ticket_priority: "P1"
+  ticket_severity: "medium"
+  source_backlog: "docs/qa/backlog.md (linha 111)"
+  source_story_gate: "docs/qa/gates/4.2-commission-calculation-on-completion.yml"
+  branch_target: "main (clean) — criar feature branch nova"
+  suggested_branch_name: "chore/4.2-test-001-real-db-integration"
+  bundle_decision: "Path A — bundle ANTES de Story 4.3 mergear"
+  authorizer: "Founder (2026-05-02)"
+
+motivation: |
+  Bug em prod (Story 4.2 hotfix PR #33) revelou que mock-based tests não
+  pegaram shape mismatch do PostgREST embed em runtime. Helper
+  `calculateAndPersistCommission` foi reescrito para 3 queries separadas
+  (matching team convention `no PostgREST JOIN`), mas a cobertura de testes
+  permanece mock-only — o gap original de "mock não simula PostgREST quirks"
+  persiste.
+
+  Founder promoveu 4.2-TEST-001 P2→P1 explicitamente em commit `77a9320`
+  com nota: **"Recomendado antes de Story 4.3 mergear"**. Path A foi
+  re-confirmado nesta sessão (2026-05-02) antes do draft 4.3 começar.
+
+scope:
+  description: |
+    Adicionar real DB integration test(s) que exercitam o flow completo
+    de `calculateAndPersistCommission` contra Supabase real (não mock).
+    Objetivo: detectar regressões PostgREST/shape antes de prod.
+
+  required_assertions:
+    - id: assertion-a
+      title: "Imutabilidade histórica via DB real"
+      detail: |
+        (1) Criar appointment + completar via RPC `transition_appointment_status`
+            → confirmar row em `commission_entries` com snapshot dos %.
+        (2) UPDATE `professionals.commission_default_percent` no DB real.
+        (3) Re-query `commission_entries` da row criada → assertar que os
+            valores snapshot NÃO mudaram (imutabilidade preservada).
+        Cobre AC5 do Story 4.2 com gradient de evidência maior que o
+        structural grep atual.
+
+    - id: assertion-b
+      title: "Engine consumer flow end-to-end com Supabase real"
+      detail: |
+        (1) Setup fixture: salon + professional (com %) + service (com price)
+            + appointment.
+        (2) Disparar `transition_appointment_status` → COMPLETED.
+        (3) Assertar:
+            - `appointments.commission_calculated_brl` populado
+            - 1 row em `commission_entries` com valores corretos
+            - Re-execução é idempotente (segunda transição não cria duplicata
+              — mas isso é bloqueado pela state machine; verificar via re-call
+              do helper directly se preciso)
+        (4) Crítico: NÃO mockar Supabase. Usar client real apontando pra
+            project softhair-dev (`oywizkjldmxhatvftmho`) com fixtures
+            cleaned-up no afterEach.
+
+    - id: assertion-c
+      title: "PostgREST regression sentinel (preventivo)"
+      detail: |
+        Adicionar comentário no test apontando que esta suite é o gate
+        contra a classe de bug do PR #33 (PostgREST embed shape mismatch).
+        Se alguém reverter `calculateAndPersistCommission` para usar
+        `!inner(...)`, o teste deve falhar visivelmente.
+
+  out_of_scope:
+    - Refatorar o helper (já feito em PR #33)
+    - Cobertura E2E Playwright (separado: 4.2-TEST-002, P2)
+    - DRY refactor do panel (separado: 4.1-MNT-001, P2)
+    - Custom lint rule `no-supabase-embed` (sugestão da memória, fora do ticket)
+
+implementation_options:
+  option_1_supabase_mcp:
+    description: |
+      Usar MCP `supabase-project-softhair` `execute_sql` em vitest setup
+      para criar/limpar fixtures direto no DB de softhair-dev.
+    pros:
+      - Zero infra nova
+      - Fixtures isoladas via salon_id randômico
+      - Acesso direto via Gage/Dara conforme reference_supabase_mcp_autonomy
+    cons:
+      - Acopla testes ao MCP server (CI deve ter env equivalente)
+      - Cleanup manual via DELETE no afterEach
+
+  option_2_supabase_client_with_service_role:
+    description: |
+      Usar `@supabase/supabase-js` com SUPABASE_SERVICE_ROLE_KEY (já em
+      GH Actions secrets pós-HARD.1) num test runner separado tipo
+      `pnpm test:integration`.
+    pros:
+      - Mais próximo de como prod roda
+      - Service role bypass RLS pra setup limpo
+      - Padrão estabelecido em outros repos
+    cons:
+      - Requer split de test command (vitest unit vs vitest integration)
+      - CI workflow precisa rodar a suite extra (~+30s)
+
+  recommendation: |
+    Option 2 (service role + test:integration target). Justificativa:
+    (a) precedente HARD.1 já tem SUPABASE_SERVICE_ROLE_KEY em CI;
+    (b) integration tests separados permitem rodar local com `pnpm test`
+        rápido e CI rodar tudo;
+    (c) padrão mais portável se futuramente migrarmos provider de DB.
+    Mas Dex tem decisão final — Option 1 é válido se ele preferir velocity.
+
+deliverables:
+  - "1 ou mais arquivos de teste de integração cobrindo assertion-a + assertion-b"
+  - "Comentário sentinel apontando para o gap do PR #33 (assertion-c)"
+  - "Atualização do `package.json` se criar novo script (ex: `test:integration`)"
+  - "Atualização do `.github/workflows/ci.yml` para rodar a suite (se Option 2)"
+  - "Cleanup hook (afterAll/afterEach) que deleta fixtures criadas"
+  - "Atualizar status do ticket `4.2-TEST-001` em `docs/qa/backlog.md` para `done`"
+  - "Atualizar/criar gate suplementar se @qa quiser (opcional)"
+
+acceptance_check:
+  - "Os testes novos PASSAM rodando contra softhair-dev real"
+  - "Os testes FALHAM se o helper for reescrito pra usar `!inner(...)` (verificar manualmente uma vez)"
+  - "CI verde 7/7 incluindo a nova suite"
+  - "Vitest baseline anterior (77 unit tests) continua passando"
+  - "Sem leak de fixtures (verificar `SELECT count(*) FROM commission_entries WHERE notes LIKE 'test-%'` ou similar)"
+
+risks_and_mitigations:
+  - risk: "Test pollution em softhair-dev (fixtures órfãs)"
+    mitigation: "salon_id randômico por test run + DELETE cascade em afterAll + idempotente"
+  - risk: "Flakiness se múltiplos CI jobs concorrem no mesmo DB"
+    mitigation: "salon_id randômico evita colisão; CI roda 1 job por PR; vitest serial mode pra integration suite"
+  - risk: "Slow tests (DB roundtrip ~50-200ms cada)"
+    mitigation: "Manter integration suite minimal (3-5 tests max); separar de `pnpm test`"
+  - risk: "Service role key vazar em logs"
+    mitigation: "`process.env.SUPABASE_SERVICE_ROLE_KEY` apenas; não logar; já é GH secret"
+
+dependencies_satisfied:
+  - "✓ Story 4.2 + hotfix PR #33 mergeado (`7022925` em main)"
+  - "✓ `professional_service_commissions` table em prod (Story 4.1)"
+  - "✓ `commission_entries` table em prod (Story 4.2)"
+  - "✓ SUPABASE_SERVICE_ROLE_KEY em GH Actions secrets (HARD.1)"
+  - "✓ Test user `e2e+test@softhair.com` em softhair-dev (HARD.1)"
+  - "✓ Vitest baseline 77/77 verde"
+
+next_workflow_step:
+  agent: "@dev (Dex)"
+  command: "*develop ou *yolo (Founder autoriza YOLO conforme feedback_velocity_over_process_when_signals_strong se signals continuam fortes)"
+  followup_after_done:
+    - "@qa (Quinn) light review confirmando assertion-c sentinel funciona"
+    - "@devops (Gage) push + PR pequeno (chore/test) — 1 commit, sem migration"
+    - "Após merge: @sm draft Story 4.3 (Monthly Commission Report)"
+
+velocity_signal: "STRONG — Founder autorizou Path A explicitamente, signals do 4.2 PASS verdict + 77/77 + zero hotfix necessária na 4.2 inicial. YOLO viável se Dex topar."
+
+notes_for_dex: |
+  Este é tech debt explícito promovido pelo Founder, não nova feature.
+  Não precisa passar por @po validate (não é story file). Direto pra
+  develop. Lembrar de marcar 4.2-TEST-001 como `done` em
+  `docs/qa/backlog.md` (linha 111 + linha 173 + linha 185) ao concluir.
