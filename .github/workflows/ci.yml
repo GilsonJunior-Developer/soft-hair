@@ -75,6 +75,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # TEMP DIAGNOSTIC (4.2-TEST-001 PR #34): confirm secrets format/length.
+      # Logs only the first 6 chars (eyJ... = legacy JWT, sb_s... = new key
+      # format unsupported by @supabase/supabase-js@2.46) + URL (public) +
+      # lengths. Remove after CI passes once.
+      - name: Diagnostic — Supabase env shape
+        run: |
+          echo "URL=$NEXT_PUBLIC_SUPABASE_URL"
+          echo "ANON head=${NEXT_PUBLIC_SUPABASE_ANON_KEY:0:6} len=${#NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+          echo "SRV  head=${SUPABASE_SERVICE_ROLE_KEY:0:6} len=${#SUPABASE_SERVICE_ROLE_KEY}"
       - run: pnpm test
       - run: pnpm build
 
