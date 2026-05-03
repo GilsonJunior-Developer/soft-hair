@@ -1,0 +1,129 @@
+from_agent: qa
+to_agent: po
+last_command: review
+story: "4.2"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.2.commission-calculation-on-completion.md"
+  gate_file: "docs/qa/gates/4.2-commission-calculation-on-completion.yml"
+  story_id: "4.2"
+  story_title: "Commission Calculation on Service Completion"
+  source_handoff: ".aiox/handoffs/dev-to-qa-gate-4.2-2026-05-02.yaml"
+  status_when_handed_off: "Ready for Review"
+  branch: "feature/4.2-commission-calculation-on-completion"
+
+verdict: PASS
+verdict_summary: |
+  All 5 ACs PASS with strong evidence. All 7 lifecycle checks PASS (1 with
+  note). Independent re-verification confirmed: lint clean, typecheck clean,
+  77/77 tests passing, AC5 grep returns 0 matches in production code.
+  Engine consumer pattern is exemplary, idempotency invariant preserved
+  by design (upsert+UNIQUE), structured logging implemented per @po caveat.
+
+  Verdict PASS (cleaner than 4.1's CONCERNS) because:
+  - Zero schema changes → no deploy-time gate
+  - All 4 quality observations are LOW severity (none block merge)
+  - Carry-overs from 4.1 closed (4.1-DOC-001 + 4.1-TEST-001)
+
+independent_reverification:
+  lint: "✓ No ESLint warnings or errors"
+  typecheck: "exit 0"
+  tests: "9 files / 77 passed (63 baseline + 14 new) in 10.23s"
+  ac5_invariant_grep: "0 matches in production code (excluding tests)"
+
+concerns_to_register_in_backlog:
+  - id: 4.2-OBS-001
+    severity: low
+    priority: P2
+    category: tech-debt
+    title: "Theoretical race: idempotent upsert + non-atomic appointments UPDATE"
+    blocks_deploy: false
+    recommendation: |
+      Not exploitable via supported APIs. RPC has FOR UPDATE row-lock +
+      state machine rejects re-transition. Optional: extract helper into
+      DB transaction or RPC if real-world divergences ever surface.
+    suggested_owner: "@dev / @data-engineer"
+
+  - id: 4.2-TEST-001
+    severity: low
+    priority: P2
+    category: tests
+    title: "AC5 rejection-grade test is unit-level; real DB integration test deferred"
+    blocks_deploy: false
+    recommendation: |
+      Mirror Story 4.1's structural grep approach for now. Phase 2
+      hardening: add pgtap or Supabase MCP execute_sql integration test
+      that updates professional.commission_default_percent and re-queries
+      commission_entries.
+    suggested_owner: "@dev / @qa"
+
+  - id: 4.2-TEST-002
+    severity: low
+    priority: P2
+    category: tests
+    title: "No E2E coverage for commission display in dialog"
+    blocks_deploy: false
+    recommendation: |
+      Bundleable with 4.1-TEST-002 (matrix + simulator E2E) into single
+      hardening story. ~30 min: open dialog with COMPLETED appointment,
+      assert "Comissão" Row appears with correct formatted value.
+    suggested_owner: "@dev"
+
+  - id: 4.2-MNT-001
+    severity: low
+    priority: P2
+    category: maintenance
+    title: "Currency formatting inline in dialog; defer formatBrl extraction"
+    blocks_deploy: false
+    recommendation: |
+      2 usages currently (simulator + dialog); extract to shared lib at
+      3rd usage threshold (Story 4.3 monthly report or 4.4 financial
+      dashboard likely). Possible bundle with 4.1-MNT-001 (panel DRY
+      refactor) into "commission display helpers" cleanup pass.
+    suggested_owner: "@dev"
+
+acceptance_criteria_status:
+  - ac: 1, status: PASS
+  - ac: 2, status: PASS
+  - ac: 3, status: PASS
+  - ac: 4, status: PASS
+  - ac: 5, status: PASS
+
+waivers_accepted:
+  - "WAIVER-CODERABBIT-DEV-4.2 (no WSL; GH App on PR)"
+  - "WAIVER-CODERABBIT-QA-4.2 (same)"
+  - "WAIVER-E2E-4.2 (story marked non-blocking)"
+
+contrast_with_story_4_1_close:
+  prod_migration_required: false
+  reason: |
+    Story 4.2 has zero schema changes — only Server Action extension + UI
+    tweak + tests + ADR amendment. No DEPLOY-001 equivalent. Push + merge
+    + smoke test on prod is the only deploy sequence.
+  carry_overs_to_4_3:
+    - "4.1-MNT-001 (panel DRY refactor) — still open"
+    - "4.2-TEST-002 (E2E) — bundleable with 4.1-TEST-002"
+    - "4.2-MNT-001 (formatBrl extraction) — defer to 3rd usage"
+    - "4.2-OBS-001 + 4.2-TEST-001 — Phase 2 hardening territory"
+
+suggested_po_workflow:
+  step_1: "Read gate file docs/qa/gates/4.2-commission-calculation-on-completion.yml"
+  step_2: "Decide: option A (close as-is, register 4 LOW concerns, hand to @devops) | option B (route 4.2-MNT-001 + 4.2-TEST-002 back to @dev for ~45 min bundle before push, then close)"
+  step_3a_if_close_directly: |
+    Run *close-story 4.2 + register 4 concerns in backlog
+    Then handoff to @devops *push (no prod migration needed this time)
+  step_3b_if_quick_fix_first: |
+    Handoff to @dev *apply-qa-fixes 4.2 with 4.2-MNT-001 + 4.2-TEST-002
+    Then re-review (light)
+    Then *close-story 4.2 + register 2 remaining concerns
+
+next_workflow_step_recommended: |
+  Option A (close as-is). Justification: PASS verdict means no rework needed
+  per QA. All 4 concerns are LOW severity. Founder memory feedback_velocity_
+  over_process_when_signals_strong applies — strongest signals yet (PASS
+  verdict + 77/77 tests + zero schema changes + clean lifecycle in single
+  session). Quick-wins can bundle with Story 4.3 hardening.
+
+suggested_command: "*close-story 4.2"

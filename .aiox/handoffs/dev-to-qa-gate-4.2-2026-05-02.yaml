@@ -1,0 +1,137 @@
+from_agent: dev
+to_agent: qa
+last_command: develop
+story: "4.2"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.2.commission-calculation-on-completion.md"
+  story_id: "4.2"
+  story_title: "Commission Calculation on Service Completion"
+  source_handoff: ".aiox/handoffs/po-to-dev-develop-4.2-2026-05-02.yaml"
+  status_when_handed_off: "Ready for Review"
+  branch: "feature/4.2-commission-calculation-on-completion"
+  base: "main@55e8662"
+  execution_mode: "YOLO"
+  decision_log: ".ai/decision-log-4.2.md"
+
+implementation_summary: |
+  Engine consumer story (no math, no schema). Server Action extension +
+  UI display + 14 vitest scenarios covering precedence + AC4 discount +
+  idempotency + failure modes + AC5 immutability behavioral test
+  (rejection-grade, deferred from Story 4.1).
+
+  Carry-overs closed: 4.1-DOC-001 (jsdoc fix) + 4.1-TEST-001 (action tests).
+  4.1-MNT-001 (panel DRY refactor) explicitly deferred per scope.
+
+acceptance_criteria_self_assessment:
+  - ac: 1
+    status: PASS
+    evidence: |
+      Server Action calculateAndPersistCommission inline at end of
+      transitionAppointmentStatus when to===COMPLETED. resolveRate +
+      calculateCommission imported from canonical engine.
+      Tests: 5 precedence scenarios (PERCENT_FIXED, TABLE+entry, fallbacks).
+  - ac: 2
+    status: PASS
+    evidence: |
+      commission_entries upserted with 6 fields: salon_id, appointment_id,
+      professional_id, service_price_brl, percent_applied,
+      commission_amount_brl. data_atendimento resolved via JOIN to
+      appointments.scheduled_at (per @po validation 2026-05-02 — no
+      denormalization). All 5 explicit fields covered in upsert tests.
+  - ac: 3
+    status: PASS
+    evidence: |
+      AppointmentDetailDialog renders "Comissão: R$ X (profissional) · R$ Y
+      (salão)" Row when status===COMPLETED AND commissionCalculatedBrl !== null.
+      AgendaAppointment type extended; fetchAgendaWindow includes the new
+      column.
+  - ac: 4
+    status: PASS
+    evidence: |
+      Server Action passes appointment.price_brl_final (not price_brl_original)
+      to calculateCommission. Test "AC4 — discount" verifies appointment with
+      original=R$100, discount=R$20, final=R$80 yields commission = 40% × 80
+      = R$32 (not 40% × 100 = R$40).
+  - ac: 5
+    status: PASS
+    evidence: |
+      14 vitest scenarios in agenda/actions.test.ts cover the test matrix
+      (PERCENT_FIXED, TABLE entry, override fallback, default fallback,
+      discount). Plus rejection-grade behavioral test: mock production code
+      never exposes update for commission_entries; rule edit after COMPLETED
+      does not recompute (verified via second invalid_transition call).
+      Structural grep on production code (excluding tests): 0 matches for
+      UPDATE pattern against commission_entries.
+
+quality_gates_executed:
+  lint:
+    command: "pnpm --filter @softhair/web lint"
+    result: "✓ No ESLint warnings or errors"
+  typecheck:
+    command: "pnpm --filter @softhair/web typecheck"
+    result: "exit 0 (no errors)"
+  unit_tests:
+    command: "pnpm --filter @softhair/web test"
+    result: "9 files | 77 passed (63 baseline + 14 new) | 0 failed"
+    duration: "12.14s"
+  build:
+    command: "pnpm --filter @softhair/web build"
+    result: "exit 0 — all routes compiled (agenda + dialog + commission code)"
+  coderabbit_cli:
+    skipped: true
+    reason: "WSL not on dev machine. GH App will run on PR push (precedent: HARD.1, 2.5, 2.7, 4.1 all merged without CLI)."
+  ac5_immutability_grep:
+    command: "grep -rn 'UPDATE.*commission_entries|.update.*commission_entries' apps/web --include='*.ts' --include='*.tsx' --exclude='*.test.ts'"
+    result: "0 matches in production code"
+
+risks_for_qa_to_assess:
+  - id: "QA-RISK-1"
+    severity: low
+    desc: |
+      Test fixture uses UUID v4 shape (`11111111-1111-4111-8111-111111111111`).
+      Previously the test used a non-versioned UUID and Zod 4 .uuid() rejected
+      it as "Dados inválidos". Lesson logged in decision-log-4.2.md as a
+      future-tester gotcha. No production impact.
+  - id: "QA-RISK-2"
+    severity: low
+    desc: |
+      Story 4.2 is the first writer to commission_entries. The architectural
+      decision (Server Action, not RPC) means status update + commission
+      insert are NOT atomic. Failure mode: status=COMPLETED but no
+      commission row. Recovery via structured logs + future backfill job.
+      QA may want to add a backlog item to track when (if ever) this needs
+      a reconciliation worker.
+  - id: "QA-RISK-3"
+    severity: low
+    desc: |
+      No E2E (Playwright) coverage added for commission display. Story
+      Dev Notes marked E2E as recommended hygiene, not requirement (waiver
+      WAIVER-E2E-4.2). Could be bundled with 4.1-TEST-002 follow-up.
+  - id: "QA-RISK-4"
+    severity: low
+    desc: |
+      AppointmentDetailDialog change is small (1 Row addition) but doesn't
+      have its own component test. Dialog already had no tests pre-4.2.
+      Optional improvement: add component-level test for the conditional
+      render. Not blocking.
+
+what_was_NOT_done:
+  - "git push — blocked by agent-authority.md, delegated to @devops"
+  - "PR creation — same"
+  - "E2E Playwright spec — story marks as non-blocking; 4.1-TEST-002 + 4.2-TEST-001 (this) bundleable"
+  - "4.1-MNT-001 (panel DRY refactor) — explicitly out of scope for 4.2 per @po validation"
+  - "softhair-prod migration — N/A (no schema changes in 4.2)"
+
+suggested_qa_workflow:
+  - "Read story 4.2 (Status=Ready for Review)"
+  - "Run *review 4.2 (comprehensive) OR *gate 4.2 (gate-only)"
+  - "Verify: code review (Server Action wiring, type extensions), tests pass (already ✅), AC coverage (above), no regressions, performance (single SQL JOIN + 1 conditional fetch + 1 upsert + 1 update — bounded), security (RLS scoping via current user salon), docs (ADR-0004 amended)"
+  - "Decision: PASS / CONCERNS / FAIL / WAIVED"
+  - "If PASS → @po close-story 4.2 → @devops *push for branch + PR (no prod migration needed this time)"
+  - "If CONCERNS → document; can still push with notes"
+  - "If FAIL → return to @dev *apply-qa-fixes"
+
+suggested_command: "*review 4.2"
