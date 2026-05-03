@@ -3,7 +3,7 @@ to_agent: qa
 last_command: develop-yolo
 story: "4.3"
 timestamp: "2026-05-03T00:00:00Z"
-consumed: false
+consumed: true
 
 context:
   story_file: "docs/stories/4.3.monthly-commission-report.md"

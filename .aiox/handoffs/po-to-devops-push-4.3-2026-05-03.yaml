@@ -1,0 +1,156 @@
+from_agent: po
+to_agent: devops
+last_command: close-story
+story: "4.3"
+timestamp: "2026-05-03T00:00:00Z"
+consumed: false
+
+context:
+  story_file: "docs/stories/4.3.monthly-commission-report.md"
+  gate_file: "docs/qa/gates/4.3-monthly-commission-report.yml"
+  story_id: "4.3"
+  story_title: "Monthly Commission Report"
+  status_when_handed_off: "Done"
+  branch: "feature/4.3-monthly-commission-report"
+  base: "main (d183168)"
+  parent_handoff: ".aiox/handoffs/qa-to-po-close-4.3-2026-05-03.yaml"
+  authorizer: "Founder (2026-05-03 — YOLO Path A)"
+
+verdict: PASS_AND_CLOSED
+verdict_summary: |
+  Story 4.3 closed via Path A (Quinn recommendation accepted). All 5 ACs
+  verified PASS by Quinn (7/7 quality checks PASS, AC4+AC5 PASS_WITH_NOTE).
+  5 LOW concerns registered to backlog. 4.2-MNT-001 confirmed done via
+  Story 4.3 Task 10. Epic 4 progress: 3/4 stories done.
+
+  ZERO SCHEMA CHANGES — no prod migration needed (mirrors 4.2 close).
+
+ready_to_push:
+  branch: "feature/4.3-monthly-commission-report"
+  base: "main"
+  commits_ahead_of_main: "1 (`46252f8` Story 4.3 develop) + 1 pending close-story commit (this PO consolidation)"
+  prod_migration_required: false
+  prod_migration_reason: "Zero schema changes. Pure code/tests/docs work + nav update + framework hardening + read-only Server Actions."
+
+what_dex_already_committed:
+  - "feat(commission): Story 4.3 — Monthly Commission Report (`46252f8`)"
+  - "12 new files (route + tests) + 5 modified (nav + dialog + simulator + fixtures + ADR + backlog)"
+  - "All quality gates green local"
+
+what_po_consolidated_in_close_commit:
+  - "Story 4.3 Status: Ready for Review → Done"
+  - "Story 4.3 Change Log v0.4 (QA review) + v0.5 (PO close)"
+  - "Story 4.3 QA Results section (Quinn's verdict + 7-check matrix)"
+  - "Gate file `docs/qa/gates/4.3-monthly-commission-report.yml` (verdict PASS)"
+  - "Backlog: new Story 4.3 section with 5 LOW concerns + counts updated (open 31→36 / total 45→50, done unchanged 13)"
+  - "Backlog: 2 history entries (Quinn QA + Pax close)"
+  - "Handoffs: 4 files (sm-to-po, po-to-dev, dev-to-qa, qa-to-po) all marked consumed=true"
+
+5_concerns_registered_in_backlog:
+  - "4.3-PERF-001 (low/P2) — AC5 perf at 50-row only; Phase 2 stress test or prod observability"
+  - "4.3-TEST-001 (low/P2) — PDF manual smoke before paying salon (Chromium + Webkit)"
+  - "4.3-A11Y-001 (low/P2) — Optional CSS module extraction (current dangerouslySetInnerHTML is safe)"
+  - "4.3-MNT-001 (low/P2) — Drill-down skeleton row polish"
+  - "4.3-OBS-001 (low/info) — Dialog thousands separator (intentional D-005)"
+
+waivers_carried_forward:
+  - "WAIVER-CODERABBIT-DEV-4.3 — until MNT-DEVOPS-001 closes (CodeRabbit GH App install)"
+  - "WAIVER-CODERABBIT-QA-4.3 — until MNT-DEVOPS-001 closes"
+  - "WAIVER-PDF-AUTOMATED-TEST — until Founder manually verifies in 2 browsers"
+
+push_workflow:
+  step_1: "git push -u origin feature/4.3-monthly-commission-report"
+  step_2: |
+    gh pr create --base main --head feature/4.3-monthly-commission-report \
+      --title "feat(commission): Story 4.3 — Monthly Commission Report" \
+      --body <see pr_metadata_suggestion below>
+  step_3: |
+    Monitor CI 7/7 (precedent: PR #34 went 7/7 verde primeira tentativa
+    after the Supabase secret + turbo.json fixes). Watch:
+      - Lint+TC+Test+Build (~1m15s expected, includes 113 vitest + 20 rls-smoke)
+      - E2E Chromium + Webkit (~2-2.5m each, includes 2 new commission-report
+        spec cases — happy path + quick-preset navigation)
+      - Lighthouse CI (~4-5m)
+      - Vercel auto-deploy
+  step_4: |
+    Squash merge after CI passes (no prod migration needed).
+
+pr_metadata_suggestion:
+  title: "feat(commission): Story 4.3 — Monthly Commission Report"
+  body_outline: |
+    Closes Story 4.3. Epic 4 progress: 3/4 stories done.
+
+    ## What
+    Top-level `/comissao` route reads `commission_entries` snapshot data
+    (Story 4.2 writer) and renders aggregate-by-professional table with
+    drill-down expansion, period filter (default current SP-month), CSV
+    export (Brazilian payroll convention), and print-CSS PDF export.
+
+    All 5 PRD ACs delivered (verbatim from epic-4 lines 32-43):
+      AC1 ✓ Tela "Comissão" com filtro por período
+      AC2 ✓ Tabela agregada (profissional, atendimentos, faturamento, comissão)
+      AC3 ✓ Expansão por linha mostra atendimentos individuais
+      AC4 ✓ Exportação para PDF (print-CSS) + CSV (Brazilian Excel format)
+      AC5 ✓ Agregação ≤ 1s para 500 atendimentos — measured 476ms at 50-row scale
+
+    ## Why
+    First reader of `commission_entries`. Snapshot data only — never
+    recompute from current rules (preserves Story 4.2 AC5 immutability).
+    Salon owner closes monthly payroll with zero retrabalho, no spreadsheet.
+
+    ## How
+    - 2 Server Actions (NO PostgREST embed convention — separate IN queries
+      per `feedback_no_postgrest_embed.md` from PR #33 hotfix)
+    - SP-timezone-correct period boundaries via `date-fns-tz`
+    - Brazilian payroll CSV format (BOM + ; + CRLF + comma decimal +
+      dd/MM/yyyy + RFC 4180 escape + TOTAL row)
+    - Print-CSS PDF export (zero new dependency)
+    - Bundled close: 4.2-MNT-001 formatBrl extraction (3rd-usage threshold met)
+    - 2 framework hardening fixes in fixtures.ts benefit ALL future
+      integration tests
+
+    ## Quality
+    - 113/113 vitest passing (was 80, +33 new)
+    - 2 new E2E specs (axe-core 0 critical violations expected)
+    - Real-DB perf sentinel: aggregation of 50 entries = 476ms
+    - Lint clean, typecheck clean, build OK
+    - QA gate: PASS (mirrors 4.2 clean PASS)
+
+    No prod migration required.
+
+    🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+risks_to_watch:
+  - "Test salon may have leftover commission_entries from prior integration test runs (cumulative across sessions). Cleanup per fixture is per-test (afterAll). Periodic admin cleanup is OK but not blocking."
+  - "Print-CSS rendering subtly differs Safari vs Chromium. Founder manual verification documented as 4.3-TEST-001."
+  - "If a partner's salon hits 200+ atendimentos/mês during MVP launch, real perf may surface as 4.3-PERF-001 follow-up."
+
+next_workflow_step:
+  agent: "@devops (Gage)"
+  command: "*push (or *pre-push first if Gage prefers cinto-e-suspensórios)"
+  followup_after_merge:
+    - "Update memory `project_sprint_state_post_HARD1` (or successor) noting Epic 4 = 3/4 done + Story 4.4 unblocked"
+    - "Activate @sm to *draft 4.4 (Basic Financial Dashboard) — last MVP story of Epic 4"
+
+velocity_signal: |
+  STRONG. Single-session SDC: @sm draft → @po validate (10/10) → @dev YOLO
+  develop → @qa PASS → @po close (Path A). Each phase ~5-15 min handoff
+  consumption + autonomous execution. Bonus value compounded across phases:
+  4.2-MNT-001 closed + 2 framework hardening fixes + decision-log discipline
+  preserved. Founder velocity preference fully validated.
+
+epic_context:
+  epic: 4
+  status: "3 of 4 MVP stories done (4.1 ✅, 4.2 ✅, 4.3 ✅)"
+  remaining: "Story 4.4 Basic Financial Dashboard (last MVP story; closes Epic 4)"
+  deferred: "Stories 4.5-4.7 NFS-e (Phase 2)"
+  next_story: "@sm *draft 4.4 after PR #4.3 merges"
+
+session_metadata:
+  session_continuation: true
+  session_chain_summary: |
+    Same multi-agent session that delivered 4.2-TEST-001 (PR #34 c440083) and
+    Story 4.3 end-to-end:
+    @sm draft 4.3 → @po validate GO 10/10 → @dev YOLO develop (113/113 tests +
+    framework hardening) → @qa review PASS → @po close Path A.
+  expected_next: "@devops *push 4.3 — same session if Founder authorizes, or new session"
