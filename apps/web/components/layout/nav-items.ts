@@ -1,4 +1,5 @@
 import {
+  Calculator,
   Calendar,
   DollarSign,
   Gift,
@@ -24,6 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/profissionais', label: 'Profissionais', icon: Users },
   { href: '/servicos', label: 'Serviços', icon: Scissors },
   { href: '/clientes', label: 'Clientes', icon: Sparkles, comingSoon: true },
+  { href: '/comissao', label: 'Comissão', icon: Calculator },
   {
     href: '/financeiro',
     label: 'Financeiro',

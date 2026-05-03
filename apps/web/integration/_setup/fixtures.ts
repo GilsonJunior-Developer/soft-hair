@@ -36,8 +36,6 @@ export type CreateAppointmentOptions = {
   scheduleOffsetDays?: number;
 };
 
-let scheduleSlot = 0;
-
 /**
  * Inserts a `PENDING_CONFIRMATION` appointment using service role (bypasses RLS).
  * Caller is responsible for transitioning to CONFIRMED then COMPLETED via the
@@ -47,13 +45,12 @@ export async function createAppointment(
   admin: SupabaseClient,
   opts: CreateAppointmentOptions,
 ): Promise<AppointmentSeed> {
-  // Stagger appointments across the year 2099 to avoid hitting the no-overlap
-  // exclusion constraint (`appointment_conflict`) when running multiple tests
-  // back-to-back against the same professional.
-  const slot = scheduleSlot++;
-  const baseDate = new Date(Date.UTC(2099, 0, 1, 9, 0, 0));
-  baseDate.setUTCMinutes(baseDate.getUTCMinutes() + slot * 120);
-  const scheduledAt = baseDate.toISOString();
+  // Per-call random slot in the year-2099+ range (~100-year window). Collision
+  // probability with N=50 inserts in a 5.25M-slot window is < 0.001%. This
+  // replaces a shared module-level `scheduleSlot` counter that collided across
+  // vitest workers (each worker had its own counter starting at 0, hitting
+  // the same time slots and tripping the exclusion constraint).
+  const scheduledAt = pickRandomFutureSlot().toISOString();
 
   const idempotencyKey = `integration-test-${randomUUID()}`;
   const cancelToken = randomUUID().replace(/-/g, '');
@@ -116,6 +113,12 @@ export async function confirmAppointment(
 
 /**
  * Soft-deletes the appointment + hard-deletes related commission rows.
+ * Also flips status to CANCELED so the `appointments_no_professional_overlap`
+ * exclusion constraint releases the time slot — without this, soft-deleted
+ * PENDING/CONFIRMED appointments accumulate as zombies that block future
+ * test fixtures at the same scheduled_at + professional combo (regression
+ * detected during Story 4.3 4.2-TEST-001 follow-up).
+ *
  * Safe to call even if no commission row exists. Errors are logged but
  * not rethrown — cleanup must never mask the real test failure.
  */
@@ -136,7 +139,10 @@ export async function cleanupAppointment(
 
   const { error: aptErr } = await admin
     .from('appointments')
-    .update({ deleted_at: new Date().toISOString() })
+    .update({
+      status: 'CANCELED',
+      deleted_at: new Date().toISOString(),
+    })
     .eq('id', appointmentId);
   if (aptErr) {
     // eslint-disable-next-line no-console
@@ -232,4 +238,19 @@ export async function deleteProfessionalServiceCommission(
       `[fixtures] deleteProfessionalServiceCommission warning: ${error.message}`,
     );
   }
+}
+
+/**
+ * Picks a random 30-minute slot in the year 2099–2199 window. Aligned to
+ * 30-minute boundaries for visual sanity in the DB; alignment is not
+ * functionally required by the schema. See {@link createAppointment} comment
+ * for the collision-probability rationale.
+ */
+function pickRandomFutureSlot(): Date {
+  const baseEpochMs = Date.UTC(2099, 0, 1, 0, 0, 0);
+  const windowMs = 100 * 365 * 24 * 60 * 60 * 1000; // ~100 years
+  const slotMs = 30 * 60 * 1000;
+  const offset = Math.floor(Math.random() * windowMs);
+  const aligned = Math.floor(offset / slotMs) * slotMs;
+  return new Date(baseEpochMs + aligned);
 }
