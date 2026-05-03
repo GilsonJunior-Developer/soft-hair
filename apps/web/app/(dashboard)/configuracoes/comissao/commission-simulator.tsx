@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { calculateCommission } from '@/lib/commission/calculate';
 import { resolveRate } from '@/lib/commission/resolve-rate';
 import type { CommissionMode } from '@/lib/commission/types';
+import { formatBrl } from '@/lib/format';
 
 type Professional = {
   id: string;
@@ -37,13 +38,6 @@ const SOURCE_LABEL: Record<string, string> = {
   SERVICE_OVERRIDE: 'override do serviço',
   PROFESSIONAL_DEFAULT: 'default do profissional',
 };
-
-function formatBrl(value: number) {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
-}
 
 export function CommissionSimulator({
   professionals,

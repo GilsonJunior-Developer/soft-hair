@@ -1,0 +1,164 @@
+from_agent: qa
+to_agent: po
+last_command: review
+story: "4.3"
+timestamp: "2026-05-03T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.3.monthly-commission-report.md"
+  gate_file: "docs/qa/gates/4.3-monthly-commission-report.yml"
+  story_id: "4.3"
+  story_title: "Monthly Commission Report"
+  source_handoff: ".aiox/handoffs/dev-to-qa-gate-4.3-2026-05-03.yaml"
+  status_when_handed_off: "Ready for Review"
+  branch: "feature/4.3-monthly-commission-report"
+
+verdict: PASS
+verdict_summary: |
+  All 5 ACs PASS with strong evidence (AC4 PDF marked PASS_WITH_NOTE per
+  WAIVER-PDF-AUTOMATED-TEST). All 7 lifecycle checks PASS (perf + AC4 with
+  notes). Independent re-verification confirmed: lint clean, typecheck clean,
+  113/113 tests passing in 40.53s, AC5 perf sentinel re-measured at 476ms,
+  snapshot-only convention preserved (1 grep match in JSDoc only), NO
+  PostgREST embed convention preserved (1 grep match in test assertion only),
+  AC5 immutability still holds (0 UPDATE on commission_entries in production).
+
+  Verdict PASS (cleaner than 4.1's CONCERNS) because:
+  - Zero schema changes → no deploy-time gate (no DEPLOY-001 equivalent)
+  - All 5 quality observations are LOW severity (none block merge)
+  - Bonus 1: closes 4.2-MNT-001 (formatBrl extraction) cleanly via Task 10
+  - Bonus 2: 2 framework hardening fixes in `fixtures.ts` benefit ALL future
+    integration tests in the repo
+  - Decision-log discipline strong (7 decisions, including D-003 PO override
+    well-rationaled and reversible)
+
+independent_reverification:
+  lint: "✓ No ESLint warnings or errors"
+  typecheck: "exit 0"
+  tests: "14 files / 113 passed (was 80, +33 new) in 40.53s"
+  perf_sentinel: "476.1ms aggregation of 50 entries (sentinel budget 500ms)"
+  snapshot_grep: "1 match in JSDoc only — production code does NOT recompute"
+  no_embed_grep: "1 match in test assertion only — production does NOT embed"
+  ac5_invariant: "0 UPDATE on commission_entries in production code (excluding tests)"
+
+concerns_to_register_in_backlog:
+  - id: 4.3-PERF-001
+    severity: low
+    priority: P2
+    category: performance
+    title: "AC5 perf budget verified at 50-row only; 500-row stress test deferred"
+    blocks_deploy: false
+    recommendation: |
+      Phase 2: add 500-row stress test variant of integration sentinel,
+      OR monitor via prod observability when partner crosses ~200
+      atendimentos/mês. Real scaling sub-linear (network/planning > row scan)
+      so 500-row should hit ~600-800ms not 4.7s — but unverified.
+    suggested_owner: "@dev / @data-engineer"
+
+  - id: 4.3-TEST-001
+    severity: low
+    priority: P2
+    category: tests
+    title: "PDF print-CSS not testable via Playwright; manual verification needed"
+    blocks_deploy: false
+    recommendation: |
+      Before Founder ships /comissao to first paying salon: open in
+      Chromium + Webkit, click "Imprimir / PDF", verify print preview
+      hides chrome + expands all rows + page-break-inside avoid works
+      at 5+ professionals. Safari macOS is the most-likely drift surface.
+    suggested_owner: "@dev / Founder (manual smoke)"
+
+  - id: 4.3-A11Y-001
+    severity: low
+    priority: P2
+    category: maintenance
+    title: "Print stylesheet uses dangerouslySetInnerHTML for static <style> block"
+    blocks_deploy: false
+    recommendation: |
+      Optional refactor: extract to `apps/web/app/(dashboard)/comissao/print.module.css`
+      if styles grow beyond ~12 lines. Current is fine for MVP scale.
+      Safe (static content, no XSS risk).
+    suggested_owner: "@dev"
+
+  - id: 4.3-MNT-001
+    severity: low
+    priority: P2
+    category: ux
+    title: "Drill-down loading state uses plain text instead of skeleton row"
+    blocks_deploy: false
+    recommendation: |
+      Polish: replace "Carregando atendimentos…" with 3-row skeleton
+      matching column widths. Bundleable with future polish sprint.
+    suggested_owner: "@dev"
+
+  - id: 4.3-OBS-001
+    severity: low
+    priority: informational
+    category: observation
+    title: "appointment-detail-dialog now displays prices with thousands separator"
+    blocks_deploy: false
+    recommendation: |
+      No action — informational. Side-effect of formatBrl extraction
+      (D-005). If salon owner reports surprise, trivial revert.
+      Otherwise accept as locale-correct improvement.
+    suggested_owner: "n/a"
+
+acceptance_criteria_status:
+  - ac: 1, status: PASS
+  - ac: 2, status: PASS
+  - ac: 3, status: PASS
+  - ac: 4, status: PASS_WITH_NOTE  # PDF needs manual verification
+  - ac: 5, status: PASS_WITH_NOTE  # 50-row sentinel only
+
+waivers_accepted:
+  - "WAIVER-CODERABBIT-DEV-4.3 (no WSL; GH App on PR)"
+  - "WAIVER-CODERABBIT-QA-4.3 (same)"
+  - "WAIVER-PDF-AUTOMATED-TEST (Playwright cannot capture print dialog)"
+
+contrast_with_story_4_2_close:
+  prod_migration_required: false
+  reason: |
+    Same as 4.2 — zero schema changes. Pure code/tests/docs work + nav
+    update + framework hardening. No DEPLOY-001 equivalent. Push + merge
+    + smoke test on prod is the only deploy sequence.
+  carry_overs_from_4_2:
+    - "4.2-MNT-001 (formatBrl extraction) ✅ CLOSED via Story 4.3 Task 10"
+    - "4.2-OBS-001 + 4.2-TEST-002 — still open (Phase 2 hardening)"
+  carry_overs_to_4_4:
+    - "4.1-MNT-001 (panel DRY refactor of commission-table-panel.tsx) — still open; SM conflated with formatBrl extraction but it's a separate concern"
+    - "4.3-PERF-001 — Phase 2 perf at scale verification"
+    - "4.3-TEST-001 — Founder manual PDF smoke before first paying salon"
+
+framework_hardening_collateral:
+  - issue: "Soft-deleted PENDING/CONFIRMED appointments accumulated as zombies blocking exclusion constraint"
+    fix: "cleanupAppointment now sets status='CANCELED' (excluded from constraint WHERE) in addition to deleted_at"
+  - issue: "Module-level scheduleSlot collided across vitest workers (each worker reset to 0, hitting same time slots)"
+    fix: "pickRandomFutureSlot() uses Math.random over 100-year window; <0.001% collision at N=50 inserts"
+  - cleanup_executed: "50 orphan PENDING test rows from prior sessions cancelled via MCP execute_sql"
+
+suggested_po_workflow:
+  step_1: "Read gate file docs/qa/gates/4.3-monthly-commission-report.yml"
+  step_2: |
+    Decide: option A (close as-is, register 5 LOW concerns + close 4.2-MNT-001
+    bundle, hand to @devops) | option B (route 4.3-MNT-001 skeleton-row OR
+    4.3-A11Y-001 CSS module back to @dev for ~30 min polish before push,
+    then close)
+  step_3a_if_close_directly: |
+    Run *close-story 4.3 + register 5 concerns in backlog + confirm
+    4.2-MNT-001 already marked done by @dev. Then handoff to @devops *push
+    (no prod migration this time).
+  step_3b_if_quick_polish_first: |
+    Handoff to @dev *apply-qa-fixes 4.3 with 4.3-MNT-001 (skeleton row)
+    OR 4.3-A11Y-001 (CSS module). Then re-review (light). Then *close-story.
+
+next_workflow_step_recommended: |
+  Option A (close as-is). Justification: PASS verdict means no rework needed
+  per QA. All 5 concerns are LOW severity. Founder memory feedback_velocity_
+  over_process_when_signals_strong applies — strongest signals continuing:
+  PASS verdict + 113/113 tests + zero schema changes + clean lifecycle in
+  single session + 4.2-MNT-001 bundled close + framework hardening bonus.
+  Quick-wins (4.3-MNT-001 skeleton, 4.3-A11Y-001 CSS module) can bundle
+  with Story 4.4 polish or future hardening sprint.
+
+suggested_command: "*close-story 4.3"

@@ -1,0 +1,227 @@
+from_agent: po
+to_agent: dev
+last_command: validate-story-draft
+story: "4.3"
+timestamp: "2026-05-03T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.3.monthly-commission-report.md"
+  story_id: "4.3"
+  story_title: "Monthly Commission Report"
+  status_when_handed_off: "Ready"
+  branch: "main (no feature branch yet — created at *develop start)"
+  parent_handoff: ".aiox/handoffs/sm-to-po-validate-4.3-2026-05-02.yaml"
+  validator: "@po (Pax)"
+  authorizer: "Founder (2026-05-03)"
+
+verdict: GO
+verdict_score: "10/10"
+
+verdict_summary: |
+  Story 4.3 passes 10-point validation cleanly. All 5 ACs verbatim from PRD
+  (linhas 32-43 do epic-4-finance-commission-nfs-e.md). Tasks well-scoped,
+  dependencies satisfied (4.1+4.2+4.2-TEST-001 framework all merged), risks
+  documented with mitigations. 3 design flags + 2 bundling decisions resolved
+  with explicit rationales. 1 finding requires @dev attention (timezone
+  correctness in default period boundaries — see findings_to_address below).
+
+decisions_resolved:
+  - id: F1-ROUTE-PLACEMENT
+    decision: "(a) /comissao top-level"
+    rationale: |
+      PRD AC1 names "Tela 'Comissão'" as standalone surface. User mental
+      model is "vou pagar comissão" not "vou ao financeiro pra ver comissão".
+      Story 4.4 keeps /financeiro as separate dashboard. Future re-grouping
+      under /financeiro is cheap if 4.4 surfaces a need.
+    affects_tasks: [3.1, 3.4, 4.1]
+    no_task_path_change_needed: true
+
+  - id: F2-PDF-STRATEGY
+    decision: "(a) print-CSS"
+    rationale: |
+      PRD AC4 literal "formatado para impressão" maps directly to print
+      stylesheet. Zero new dependency. "Save as PDF" via browser print
+      dialog cover deliverable. @react-pdf/renderer (~100kb) deferred
+      to Phase 2 if Founder reports user friction with print dialog.
+    affects_tasks: [6]
+    no_task_path_change_needed: true
+
+  - id: F3-AGG-STRATEGY
+    decision: "(a) SQL aggregation with RPC fallback"
+    rationale: |
+      AC5 perf budget (≤1s for 500 atendimentos) trivial in SQL with
+      existing index. JS reduce moves N rows over wire when only K need
+      to display. Drill-down (Task 2) fetches raw separately on click.
+      If `select=col,col.sum()` URL syntax has gotchas at runtime,
+      escalation path: @data-engineer creates RPC `fetch_commission_summary`
+      migration. Document fallback decision if taken.
+    affects_tasks: [1.4]
+    no_task_path_change_needed: true
+
+  - id: BUNDLE-TASK-10
+    decision: APPROVED (stays in story)
+    rationale: |
+      3rd-usage threshold met (commission-simulator + appointment-detail-dialog
+      + new comissao-report). Closes 4.1-MNT-001 + 4.2-MNT-001 atomically.
+      Doing in separate PR fragments review.
+    constraint: |
+      SCOPE STRICT — Task 10 is APENAS extract `formatBrl` to
+      `apps/web/lib/format.ts` + update 2 import sites + use in new code.
+      DO NOT refactor commission-simulator.tsx or appointment-detail-dialog.tsx
+      further (e.g. don't move other helpers, don't restructure components).
+      If Dex sees opportunity, file as separate backlog item.
+
+  - id: BUNDLE-ADR-AMENDMENT
+    decision: APPROVED (Task 11.1 stays)
+    rationale: |
+      Continuity from 4.1 + 4.2 ADR-0004 amendments. Establishes durable
+      "snapshot data is read-only" convention preventing future drift.
+      Documents period-scoping default (created_at) + Phase 2 toggle path.
+
+unknowns_resolved:
+  - id: PERF-TEST-SCALE
+    question: "50-row vs 500-row perf test in Task 8?"
+    decision: "50 rows (River default)"
+    rationale: |
+      50 rows with realistic JOIN cost extrapolates linearly via DB query
+      plan. 500-row stress test deferred — Task 8.3 escalation path
+      (HALT + escalate to @data-engineer if 50-row exceeds 500ms) provides
+      sentinel coverage. If Founder reports prod perf issues at scale,
+      run 500-row stress test as Phase 2 hardening.
+
+  - id: UX-EXPERT-PRE-REVIEW
+    question: "@ux-design-expert review BEFORE @dev or at @qa gate?"
+    decision: "Defer to @qa gate (no pre-dev review)"
+    rationale: |
+      Print-CSS is well-understood pattern. @dev follows common patterns
+      (hide nav/sidebar, force expanded rows visible, page-break-inside:
+      avoid, right-align numerics, header with salon+period). @qa verifies
+      print preview in 2 browsers (Chromium + Webkit) at gate.
+
+  - id: PERIOD-SCOPING-DEFAULT
+    question: "created_at vs scheduled_at as filter column default?"
+    decision: "created_at"
+    rationale: |
+      Matches "fechamento mensal" mental model — owner says "vou fechar Maio"
+      meaning "todas comissões calculadas em Maio". Late-marked appointments
+      (rare edge case) appear in the month they were marked COMPLETED, not
+      service month. Phase 2 toggle path documented in ADR-0004 amendment.
+
+findings_to_address:
+  - id: TIMEZONE-FINDING-4.3-001
+    severity: medium
+    blocks_merge: false
+    blocks_merge_reason: |
+      Caught at validation, must address during *develop. Not blocking
+      development from starting — flagged as required Task 1.5 + Task 3.1
+      adjustment (already updated in story file v0.2).
+    description: |
+      Original story Task 3.1 said "current month start → next month start
+      (UTC, BR business convention)" — contradictory. UTC and BR convention
+      diverge by ~3h (UTC-3). Salon owner em São Paulo pedindo "Maio"
+      espera "Maio em horário SP" — appointment às 23h SP de 30/Abril
+      cai em Maio se filtrar por UTC.
+    fix_required: |
+      Use `date-fns-tz` (já em apps/web/package.json deps) para computar
+      boundaries em `America/Sao_Paulo`:
+        from = startOfMonth(now, { timezone: 'America/Sao_Paulo' })  // midnight SP do dia 1
+        to   = startOfMonth(addMonths(now, 1), { timezone: 'America/Sao_Paulo' })
+      Convert pra ISO via `formatInTimeZone(date, 'America/Sao_Paulo', "yyyy-MM-dd'T'HH:mm:ssXXX")`
+      ou equivalent — passa para Server Action como Date.
+    test_to_add: |
+      Vitest case: appointment com scheduled_at = '2026-04-30T23:30:00-03:00'
+      (= '2026-05-01T02:30:00Z' UTC) deve aparecer em "Abril" report,
+      NÃO em "Maio". Ie. boundary check em SP timezone.
+    affects_tasks: [1.5, 3.1, 7.2]
+    story_file_already_updated: true
+
+waivers_accepted:
+  - id: WAIVER-CODERABBIT-DEV-4.3
+    description: "CodeRabbit CLI unavailable in dev (no WSL). GitHub App will run on PR push."
+    rationale: "Same waiver pattern as 4.1 + 4.2 + 4.2-TEST-001 — CodeRabbit GH App not yet installed (MNT-DEVOPS-001 backlog)."
+    blocks_acceptance: false
+
+risks_acknowledged:
+  - id: PERF-PROD-AT-SCALE
+    severity: medium
+    note: "Mitigation Task 8.3 already in story. No additional gate required."
+  - id: CSV-LOCALE-EDGE-CASES
+    severity: low
+    note: "Excel-BR baseline coverage sufficient. Numbers/Sheets edge cases tracked as Phase 2 if reported."
+  - id: PRINT-CSS-BROWSER-DRIFT
+    severity: low
+    note: "@qa gate covers Chromium + Webkit. Safari macOS quirks → Phase 2 backlog if any surface."
+
+execution_mode_recommendation:
+  default: "YOLO authorized"
+  rationale: |
+    Signals fortes: precedente 4.2 PASS verdict + 4.2-TEST-001 single-pass
+    YOLO + clear flags resolved + framework reuse + zero schema change.
+    Founder explicitly authorized YOLO em 4.2 e 4.2-TEST-001 — same memory
+    `feedback_velocity_over_process_when_signals_strong` applies.
+  alternative: "Interactive if Dex prefers checkpoints on PostgREST aggregation syntax (Task 1.4) — esse é o único ponto de risco real porque depende de behavior do supabase-js@2.46 que não testamos antes."
+
+10_point_validation:
+  - check: "1. Clear and objective title"
+    status: PASS
+    evidence: "'Story 4.3: Monthly Commission Report' — verbatim from epic"
+  - check: "2. Complete description (problem/need explained)"
+    status: PASS
+    evidence: "Story statement frames manual payroll pain + spreadsheet drift; ACs explicit"
+  - check: "3. Testable acceptance criteria"
+    status: PASS
+    evidence: "All 5 ACs have measurable conditions; AC5 has hard perf budget; AC4 has 2 verifiable deliverables"
+  - check: "4. Well-defined scope (IN and OUT)"
+    status: PASS
+    evidence: "11 Tasks IN; CSV/PDF strategies clear post-F2; Task 10 'scope strict' constraint set"
+  - check: "5. Dependencies mapped"
+    status: PASS
+    evidence: "4.1 + 4.2 + 4.2-TEST-001 + HARD.1 listados; integration framework ready"
+  - check: "6. Complexity estimate"
+    status: PASS
+    evidence: "Medium per CodeRabbit Integration block; rationale (lower risk than 4.2)"
+  - check: "7. Business value"
+    status: PASS
+    evidence: "'Owner closes monthly payroll fast + zero retrabalho' — direct user benefit"
+  - check: "8. Risks documented"
+    status: PASS
+    evidence: "3 risks no SM handoff + 1 finding from PO (timezone) + 5 design flags surfaced"
+  - check: "9. Criteria of Done"
+    status: PASS
+    evidence: "Each Task has explicit completion + tests; quality_gate_tools listed; perf budget hard contract"
+  - check: "10. Alignment with PRD/Epic"
+    status: PASS
+    evidence: "ACs verbatim from epic-4-finance-commission-nfs-e.md lines 32-43"
+
+next_workflow_step:
+  agent: "@dev (Dex)"
+  command: "*develop 4.3 (or *develop-yolo 4.3)"
+  expected_outcome: |
+    Branch `feature/4.3-monthly-commission-report` created. 11 tasks executed
+    (10 mandatory + Task 7 split into 7.1-7.4 sub-units). All 5 ACs satisfied
+    with quality gates passing. Vitest baseline 80 → ~92 (12 new tests). 1
+    new E2E spec (commission-report.spec.ts). Status promoted Ready → Ready
+    for Review. Handoff to @qa.
+  followup_after_done:
+    - "@qa Quinn `*review 4.3` (light or full per CodeRabbit Integration spec)"
+    - "@po `*close-story 4.3` (Option A or B per QA verdict)"
+    - "@devops `*push` + PR + squash merge (no prod migration — zero schema change)"
+    - "Activate @sm to draft Story 4.4 (Basic Financial Dashboard) — last MVP story of Epic 4"
+
+velocity_signal: |
+  STRONG. Path A bundle of 4.2-TEST-001 cleared blocker. Framework reusable.
+  4.2 PASS precedent + 4.2-TEST-001 single-pass YOLO precedent. No schema
+  change → no prod migration sequencing risk. Founder velocity preference
+  + clear flags resolution → YOLO viable.
+
+session_metadata:
+  session_continuation: true
+  session_chain_so_far: |
+    @sm draft 4.2-TEST-001 (handoff prep) →
+    @dev YOLO Option 2 (real DB integration tests) →
+    @devops push PR #34 (3 CI bug fixes: turbo.json env + ANON format + SRV wrong project) →
+    squash merge c440083 →
+    @sm draft 4.3 YOLO →
+    @po validate 4.3 GO 10/10 (this handoff)
+  expected_next: "@dev develop 4.3 — same session if Founder authorizes, or new session"

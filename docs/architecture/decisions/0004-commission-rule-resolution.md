@@ -208,3 +208,56 @@ PRD AC2 lists `data_atendimento` as a required field. **No new column was added.
   - **AC5 immutability (rejection-grade behavioral test):** mock production code never exposes `update` for commission_entries; rule edit after COMPLETED does NOT trigger recompute (verified via second invalid_transition call).
 
 The structural grep `grep -r 'UPDATE.*commission_entries\|.update.*commission_entries' apps/web/` continues to return 0 matches after Story 4.2.
+
+---
+
+## Story 4.3 amendment — Read-side conventions (Monthly Commission Report)
+
+**Date:** 2026-05-03
+**Story:** 4.3 Monthly Commission Report
+**Authors:** @sm (River) + @po (Pax) decisions; implementation @dev (Dex YOLO)
+
+### Read-only snapshot data — never recompute
+
+Story 4.3 is the FIRST READER of `commission_entries` data. The reader's display columns (`commission_entries.{percent_applied, commission_amount_brl, service_price_brl}`) come from the snapshot Story 4.2's writer persisted at COMPLETED time — **never** from current `professionals.commission_default_percent` or any live engine call. This preserves the AC5 immutability invariant Story 4.2 worked to defend: a rule edit must not retroactively shift past-period payroll.
+
+Drill-down rows resolve `clientName` + `serviceName` from current `clients.name` + `services.name` (NOT denormalized into `commission_entries`). If a service is renamed post-COMPLETED, the report shows the new name. Rare in practice; non-issue at MVP scale; defer to Phase 2 if a partner reports payroll surprise.
+
+### Period scoping default = `commission_entries.created_at`
+
+The aggregation Server Action filters by `commission_entries.created_at >= from AND created_at < to` (caller-supplied UTC instants from SP-midnight boundaries — see "Brazilian timezone correctness" below). Two candidate columns existed:
+
+| Column | Semantics | Trade-off |
+|---|---|---|
+| `commission_entries.created_at` (chosen) | When commission was calculated (= when appointment marked COMPLETED) | Matches "fechamento mensal" mental model. Late-marked appointments appear in the month they were marked COMPLETED. |
+| `appointments.scheduled_at` (deferred) | When the service was actually performed | Strictly accurate to "service month" but appointment edits could shift past report retroactively. |
+
+`created_at` aligns with how a salon owner closes payroll: "vou fechar Maio" = "all commissions calculated in May". A Phase 2 toggle to `scheduled_at` is straightforward if a partner reports drift between expectations and report contents.
+
+### Brazilian timezone correctness — period boundaries
+
+Default month boundaries are computed as wall-clock midnight in `America/Sao_Paulo` (UTC-3) and converted to absolute UTC for the query. Naive UTC boundaries would misattribute appointments at 23h SP on the last day of a month into the following month (boundary off by 3 hours).
+
+Implemented in `apps/web/app/(dashboard)/comissao/period.ts` via `date-fns-tz` (`fromZonedTime`, `toZonedTime`). Pattern mirrors `apps/web/lib/agenda/date-range.ts:53-79` (`computeWindow`).
+
+Sentinel test: an appointment at `2026-04-30T23:30:00-03:00` (= `2026-05-01T02:30:00Z` UTC) does NOT appear in the May report.
+
+### NO PostgREST embed — convention upheld
+
+Both Server Actions (`fetchCommissionReportSummary` and `fetchCommissionReportRows`) follow the codebase convention established by Story 4.2 PR #33 hotfix: separate `IN` queries to resolve relations, never `from('X').select('..., Y!inner(...)')` syntax. PostgREST embed shapes silently differ from mock-test expectations and were the root cause of the Story 4.2 production bug.
+
+Aggregation strategy chosen: **JS reduce on raw rows** instead of PostgREST aggregation (`.select('col,col.sum()')`). Rationale documented in `.ai/decision-log-4.3.md` D-003. At MVP scale (~500 commission_entries/month), the wire-transfer + reduce cost is ~50ms — well under the AC5 1s budget. Phase 2 can swap to an RPC migration `fetch_commission_summary` if scale demands it.
+
+### Test coverage added in 4.3
+
+- **`apps/web/app/(dashboard)/comissao/csv.test.ts`** — 11 vitest cases covering the Brazilian payroll CSV format (BOM + `;` separator + CRLF + comma decimal + dd/MM/yyyy date + TOTAL row + RFC 4180 escaping for fields containing `;` or `"`).
+- **`apps/web/app/(dashboard)/comissao/period.test.ts`** — timezone correctness regression suite (TIMEZONE-FINDING-4.3-001): the SP-midnight ↔ UTC conversion never misattributes boundary-day appointments.
+- **`apps/web/app/(dashboard)/comissao/actions.test.ts`** — Server Action mocks asserting NO PostgREST embed (separate `from()` calls captured), rounding correctness on aggregates, sort by commissionBrl DESC, friendly error path on DB failure.
+- **`apps/web/integration/commission-report-perf.integration.test.ts`** — real-DB integration test validating AC5 perf budget. 50 commission_entries inserted via service-role bulk insert; aggregation completes in ~450ms wall-clock (sentinel `< 500ms`). Reuses the framework from 4.2-TEST-001.
+- **`apps/web/e2e/commission-report.spec.ts`** — Playwright happy-path: render `/comissao` + filter form + quick-presets + export buttons + table-or-empty + axe-core 0 critical violations.
+
+### Format helper consolidation (closes 4.1-MNT-001 + 4.2-MNT-001)
+
+`apps/web/lib/format.ts` exports `formatBrl(value: number): string` (Intl `pt-BR` currency). 3rd-usage threshold met (commission-simulator + appointment-detail-dialog + commission-report). Both prior call sites migrated to the shared helper. Side effect: `appointment-detail-dialog.tsx` gains thousands separator (`R$ 1.234,56` instead of `R$ 1234,56`) for amounts ≥ R$ 1.000,00.
+
+Out of scope (other stories' surfaces — left for their own refactor cadence): 7 additional `.toFixed(2).replace('.', ',')` sites in `servicos/types.ts`, `appointment-form.tsx`, `onboarding/.../step-3-prices-form.tsx`, public booking pages.

@@ -1,0 +1,163 @@
+from_agent: sm
+to_agent: po
+last_command: draft
+story: "4.3"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.3.monthly-commission-report.md"
+  story_id: "4.3"
+  story_title: "Monthly Commission Report"
+  status_when_handed_off: "Draft"
+  branch: "main (no feature branch yet — created at *develop start)"
+  parent_dependency_chain:
+    - "Story 4.1 (engine) merged 55e8662"
+    - "Story 4.2 (writer) merged 7de5b64 + hotfix 7022925"
+    - "4.2-TEST-001 (integration framework) merged c440083"
+
+drafted_by: "@sm River, YOLO mode authorized by Founder 2026-05-02 (continuation session)"
+
+scope_summary: |
+  Story 4.3 is the FIRST READER of `commission_entries` — the snapshot table
+  Story 4.2 writes to. Surface: new route /comissao with aggregate table
+  (per professional) + drill-down expansion + period filter (default mês corrente)
+  + CSV export (Brazilian payroll format) + PDF via print-CSS. Reuses integration
+  test framework from 4.2-TEST-001 for AC5 perf budget validation.
+
+  11 Tasks scoped covering 5 ACs + 4 cross-cutting concerns (bundled tech debt
+  cleanup of 4.1-MNT-001 + 4.2-MNT-001 via 3rd-usage formatBrl extraction).
+
+flags_for_po_validation:
+  - id: F1
+    title: "ROUTE-PLACEMENT"
+    options:
+      a: "/comissao top-level (matches PRD literal 'Tela Comissão')"
+      b: "/financeiro/comissao sub-route (groups under existing nav)"
+    sm_recommendation: "a"
+    rationale: |
+      PRD AC1 names it 'Tela \"Comissão\"' as standalone. Nav has 9 items
+      already, one more is fine. Future could fold both under /financeiro
+      if 4.4 wants nesting — easier to ungroup later than to migrate.
+
+  - id: F2
+    title: "PDF-STRATEGY"
+    options:
+      a: "print-CSS (zero dep, browser handles 'Save as PDF')"
+      b: "@react-pdf/renderer (~100kb, full layout control)"
+      c: "server-side Puppeteer (heaviest, highest fidelity)"
+    sm_recommendation: "a"
+    rationale: |
+      PRD AC4 says 'formatado para impressão' literally. Print-CSS aligns
+      directly. Zero new dependency. Modern browsers all have 'Save as PDF'
+      in print dialog. Defer (b) to Phase 2 if a partner reports friction.
+
+  - id: F3
+    title: "AGG-STRATEGY"
+    options:
+      a: "SQL aggregation in Server Action (.from().select() with sum/count)"
+      b: "Fetch raw rows + JS reduce"
+    sm_recommendation: "a"
+    rationale: |
+      AC5 perf budget (≤1s for 500 atendimentos) is trivial in SQL with
+      existing index `idx_commission_entries_professional`. JS reduce moves
+      N rows over wire when only K (=professional count, ~3-10) need to
+      display in aggregate. Drill-down (Task 2) fetches raw separately on
+      row expansion only.
+
+bundling_decisions_to_validate:
+  - id: TASK_10_BUNDLE
+    title: "formatBrl extraction (4.1-MNT-001 + 4.2-MNT-001)"
+    description: |
+      Story 4.3 is the 3rd usage of currency formatting (after
+      commission-simulator.tsx + appointment-detail-dialog.tsx). Backlog
+      flagged 'extract at 3rd-usage threshold'. Task 10 bundles this cleanup.
+    sm_recommendation: "Bundle (Task 10 stays in story)"
+    rationale: |
+      Story 4.3 naturally introduces the 3rd usage. Doing extraction in
+      a separate refactor PR fragments review. Marked 'bundleable, not
+      blocking' so @po can de-bundle if scope concerns surface.
+    de_bundle_path: "Move Task 10 to a follow-up PR; keep 4.3 focused on report"
+
+  - id: ADR_AMENDMENT
+    title: "ADR-0004 amendment for read-pattern + period-scoping"
+    description: |
+      Task 11.1 appends section to `docs/architecture/decisions/0004-commission-rule-resolution.md`
+      documenting (a) read snapshot data only (never recompute) and (b) period
+      scoping defaults to commission_entries.created_at (vs scheduled_at).
+    sm_recommendation: "Include in story"
+    rationale: |
+      Establishes durable convention that prevents future drift (e.g. someone
+      writing a 'live' report that recomputes from current rules). ADR
+      precedent established in 4.1 + 4.2 — continuity expected.
+
+waivers_proposed:
+  - id: WAIVER-CODERABBIT-DEV-4.3
+    description: "CodeRabbit CLI unavailable in dev (no WSL). GitHub App will run on PR push."
+    rationale: "Same waiver as 4.1 + 4.2 + 4.2-TEST-001 — pattern established"
+    blocks_acceptance: false
+
+unknowns_for_po:
+  - "AC5 perf 500 row contract: should 50-row Task 8 perf test be considered sufficient signal, or does @po want a 500-row stress test (more fixture setup time, ~5x test duration)?"
+  - "PDF print stylesheet: does @po want @ux-design-expert review BEFORE @dev develop, or trust @dev to follow common print-CSS patterns and review at @qa gate?"
+  - "Period scoping (created_at vs scheduled_at — see Dev Notes 'Period scoping decision'): @sm picked created_at as default. Confirm with @po this matches 'fechamento mensal' mental model the Founder uses."
+
+risks_to_register:
+  - id: PERF-PROD-AT-SCALE
+    severity: medium
+    description: "AC5 budget (≤1s for 500 entries) is verified at 50-row scale in Task 8. If a partner's salon hits 500 atendimentos/mês during MVP launch, real perf may surface as Phase 2 follow-up."
+    mitigation: "Task 8.3 escalation path documented (HALT and engage @data-engineer if 50-row test exceeds 500ms)."
+  - id: CSV-LOCALE-EDGE-CASES
+    severity: low
+    description: "Brazilian Excel still has heterogeneous behavior across versions/macOS — BOM + ; + CRLF is the safest baseline, but a partner using Numbers or Google Sheets will see different parsing."
+    mitigation: "Document expected viewer (Excel-BR) in story Completion Notes; add Phase 2 toggle for international comma format if Founder reports complaints."
+  - id: PRINT-CSS-BROWSER-DRIFT
+    severity: low
+    description: "Print rendering subtly differs across Chrome/Firefox/Safari/Edge. Story tests in @qa gate against Chromium + Webkit (HARD.1 baseline) but Safari macOS print preview can show layout drift."
+    mitigation: "@qa gate verifies on 2 browsers; document any Safari-only quirks in Phase 2 backlog."
+
+10_point_checklist_self_assessment_for_po:
+  - check: "1. Clear and objective title"
+    status: PASS
+    evidence: "'Story 4.3: Monthly Commission Report' — verbatim from epic"
+  - check: "2. Complete description (problem/need explained)"
+    status: PASS
+    evidence: "Story statement frames pain (manual payroll + spreadsheet drift); ACs explicit"
+  - check: "3. Testable acceptance criteria"
+    status: PASS
+    evidence: "All 5 ACs have measurable conditions; AC5 has hard perf budget"
+  - check: "4. Well-defined scope (IN and OUT)"
+    status: PASS
+    evidence: "11 Tasks IN; CSV scope explicit (BR locale); PDF deferred to print-CSS pending F2"
+  - check: "5. Dependencies mapped"
+    status: PASS
+    evidence: "4.1 + 4.2 + 4.2-TEST-001 listed; integration framework ready"
+  - check: "6. Complexity estimate"
+    status: PASS
+    evidence: "Medium per CodeRabbit Integration block; lower risk than 4.2 (no schema, no idempotency)"
+  - check: "7. Business value"
+    status: PASS
+    evidence: "'Owner closes monthly payroll fast + zero retrabalho' — direct user benefit"
+  - check: "8. Risks documented"
+    status: PASS
+    evidence: "3 risks above + 5 design flags surfaced in Dev Notes"
+  - check: "9. Criteria of Done"
+    status: PASS
+    evidence: "Each Task has explicit completion conditions + tests; @qa gate per quality_gate_tools"
+  - check: "10. Alignment with PRD/Epic"
+    status: PASS
+    evidence: "ACs verbatim from epic-4-finance-commission-nfs-e.md lines 32-43"
+
+estimated_self_score: 10/10
+
+next_workflow_step:
+  agent: "@po (Pax)"
+  command: "*validate-story-draft 4.3"
+  expected_outcome: |
+    GO (>=7) with the 3 flags resolved (F1, F2, F3) + bundling decisions
+    confirmed (Task 10 stay/leave + ADR amendment). Status promoted Draft → Ready.
+  alternative_outcome: |
+    NO-GO if @po wants different period-scoping default, different PDF strategy,
+    or different bundling — return to @sm for revision.
+
+velocity_signal: "STRONG — Path A bundle of 4.2-TEST-001 cleared the blocker; framework from PR #34 ready for reuse; 4.2 PASS verdict precedent suggests 4.3 should also flow cleanly. YOLO viable for @dev once @po validates."

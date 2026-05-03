@@ -5,6 +5,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { BR_TIMEZONE } from '@/lib/agenda/date-range';
+import { formatBrl } from '@/lib/format';
 import { formatPhoneBR } from '@/lib/phone';
 import {
   allowedTransitions,
@@ -81,7 +82,7 @@ export function AppointmentDetailDialog({
               className="text-xs"
               style={{ color: 'var(--color-text-muted)' }}
             >
-              R$ {appointment.priceFinalBrl.toFixed(2).replace('.', ',')}
+              {formatBrl(appointment.priceFinalBrl)}
             </span>
           </div>
 
@@ -103,7 +104,7 @@ export function AppointmentDetailDialog({
               appointment.commissionCalculatedBrl !== null && (
                 <Row
                   label="Comissão"
-                  value={`R$ ${appointment.commissionCalculatedBrl.toFixed(2).replace('.', ',')} (profissional) · R$ ${(appointment.priceFinalBrl - appointment.commissionCalculatedBrl).toFixed(2).replace('.', ',')} (salão)`}
+                  value={`${formatBrl(appointment.commissionCalculatedBrl)} (profissional) · ${formatBrl(appointment.priceFinalBrl - appointment.commissionCalculatedBrl)} (salão)`}
                 />
               )}
           </dl>
