@@ -1,0 +1,105 @@
+from_agent: devops
+to_agent: sm
+last_command: push
+story: "4.2"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  trigger: "Story 4.1 merged. Founder requested @sm *draft 4.2 immediately."
+  predecessor_story: "4.1 (Commission Rule Engine) merged as squash commit 55e8662 in main 2026-05-02T23:01:36Z"
+  predecessor_pr: "https://github.com/GilsonJunior-Developer/soft-hair/pull/31"
+  source_handoff: ".aiox/handoffs/po-to-devops-push-4.1-2026-05-02.yaml"
+
+active_epic:
+  id: "Epic 4"
+  title: "Finance & Commission (NFS-e deferred to Phase 2)"
+  prd_file: "docs/prd/epic-4-finance-commission-nfs-e.md"
+  mvp_scope: ["4.1 ✅", "4.2 ⏳", "4.3", "4.4"]
+  progress: "1/4 stories done (25%)"
+
+next_story:
+  id: "4.2"
+  title: "Commission Calculation on Service Completion"
+  prd_section: "docs/prd/epic-4-finance-commission-nfs-e.md (lines 21-31)"
+  user_story: |
+    Como sistema, quero calcular comissão automaticamente ao marcar serviço
+    como atendido, para que o valor devido ao profissional seja registrado
+    sem input manual.
+  acceptance_criteria_summary:
+    - "AC1: Ao mudar status para COMPLETED, worker calcula comissão aplicando regra vigente"
+    - "AC2: Registro persistido em commission_entries (appointment_id, profissional_id, valor_servico, percentual_aplicado, valor_comissao, data_atendimento)"
+    - "AC3: Comissão exibida no card do agendamento pós-conclusão"
+    - "AC4: Se houver desconto aplicado no serviço, comissão é calculada sobre valor descontado (documentado em DoD)"
+    - "AC5: Testes unit cobrem: % fixa, tabela, override, desconto, múltiplos serviços no mesmo agendamento"
+  story_type: "Feature (worker/trigger + UI display + tests)"
+  predicted_complexity: "Medium — engine consumer, no new schema needed (everything pre-existing)"
+  predicted_specialized_agents:
+    - "@dev (executor — wires engine to status transition + UI display in agenda card)"
+    - "@data-engineer (supporting — review trigger/RPC if commission calc lives in DB; verify no UPDATE on commission_entries beyond initial insert)"
+    - "@qa (quality gate — AC4 discount edge cases + AC5 test matrix)"
+
+dependencies_already_satisfied_by_4_1:
+  - "✅ Engine `apps/web/lib/commission/{resolve-rate,calculate}.ts` (Story 4.1)"
+  - "✅ Schema `commission_entries` with snapshot fields (Story 1.1)"
+  - "✅ Schema `professional_service_commissions` table for TABLE mode (Story 4.1, applied to dev + prod)"
+  - "✅ `appointments.commission_calculated_brl` column (Story 1.1)"
+  - "✅ `appointments.price_brl_final` (already-discounted price for AC4) (Story 1.1)"
+  - "✅ Appointment status lifecycle with COMPLETED transition (Story 2.6)"
+  - "✅ Types regenerated in packages/db/types/database.ts (Story 4.1)"
+
+key_design_decisions_to_make_during_draft:
+  - id: "WHERE-CALC-LIVES"
+    desc: |
+      Where does the calc happen? Two options:
+      A) **Server Action** triggered by UI when staff clicks "Mark COMPLETED" — pure JS, easy to test, but client-driven
+      B) **DB trigger or RPC** on appointments status transition to COMPLETED — server-side authoritative, harder to test
+      C) **Hybrid:** Server Action calls an RPC `transition_appointment_status` (already exists per Story 2.6 migration `20260422000004`) which inserts the commission_entries row in same transaction.
+
+      Recommend **Option C** (hybrid via existing RPC). The transition RPC already exists and changes status. Extending it to also INSERT into commission_entries when the new status is COMPLETED is atomic + reuses existing security boundary.
+
+      Need to verify: does RPC `transition_appointment_status` already do anything commission-related? If not, story extends it.
+  - id: "DISCOUNT-CONTRACT"
+    desc: |
+      AC4: "comissão calculada sobre valor descontado". Engine's `calculateCommission` already takes
+      `servicePriceBrl` as discounted price (caller responsibility per Story 4.1 jsdoc).
+      Story 4.2 just needs to pass `appointments.price_brl_final` (which is post-discount) instead of `price_brl_original`. Verify schema column semantics.
+  - id: "RULE-RESOLUTION-TIMING"
+    desc: |
+      AC1 says "regra vigente" — apply rule at COMPLETED time, not at appointment-create time.
+      Snapshot pattern already designed for this (Story 4.1 ADR-0004). Engine resolves rate from
+      current professional + service + table_entry state at the moment of COMPLETED transition.
+  - id: "UI-DISPLAY-LOCATION"
+    desc: |
+      AC3: card do agendamento exibe comissão pós-conclusão. Today the agenda card lives in
+      `apps/web/app/(dashboard)/agenda/`. Story should add a small commission line/badge that
+      appears only when `appointment.status === 'COMPLETED'` AND `commission_calculated_brl IS NOT NULL`.
+      Format: "Comissão: R$ X,XX" (formatBrl from commission-simulator can be reused).
+  - id: "MULTIPLE-SERVICES-PER-APPOINTMENT"
+    desc: |
+      AC5 mentions "múltiplos serviços no mesmo agendamento". Schema currently has appointments
+      with a single `service_id` (1:1). If multi-service is in scope, that's a schema change beyond 4.2.
+      **Likely interpretation:** AC5 just means "test the rule resolution across multiple service types",
+      i.e., calc one commission per appointment but verify the engine handles different services (corte, coloração, etc.) correctly. Confirm with @po during validation.
+
+flags_for_sm_to_call_out_in_draft:
+  - "FLAG-RPC-EXTENSION: confirm existing transition_appointment_status RPC behavior; story extends it OR creates a sibling RPC"
+  - "FLAG-MULTI-SERVICE: AC5 'múltiplos serviços no mesmo agendamento' — schema is 1:1 today; clarify with @po"
+  - "FLAG-AC5-IMMUTABILITY-IN-PRACTICE: Story 4.1 enforced AC5 via grep. Story 4.2 is the FIRST writer to commission_entries — needs the rejection-grade integration test (DB-level) that Story 4.1 deferred. Update rule should NOT touch existing commission_entries rows."
+  - "FLAG-CARRY-OVER-4.1-CONCERNS: Strong recommendation to fix 4.1-MNT-001 (panel DRY) + 4.1-DOC-001 (jsdoc) + 4.1-TEST-001 (action integration tests) BEFORE or AS PART OF 4.2 — 4.1-TEST-001 specifically because 4.2 will rely on the action contracts being stable"
+
+prerequisites_called_out_for_sm:
+  - "Read PRD Epic 4 lines 21-31 (Story 4.2 spec)"
+  - "Read existing `transition_appointment_status` RPC migration `supabase/migrations/20260422000004_transition_appointment_status_rpc.sql` to understand current behavior"
+  - "Read Story 2.6 (appointment-status-lifecycle.md) Dev Notes for status transition flow"
+  - "Verify Story 4.1 engine signatures (resolveRate + calculateCommission) — story 4.2 will import these"
+  - "Run *story-checklist after draft per Phase 1 of SDC"
+  - "CodeRabbit Integration section: predict Database focus (RPC extension) + Backend focus (engine consumer)"
+
+constitutional_compliance:
+  - "Article IV (No Invention): All scope must trace to PRD Epic 4 lines 21-31 + ADR-0004 (Story 4.1 immutability invariant)"
+  - "Authority: @sm authorized for *draft. Engine 4.1 is canonical — DO NOT recreate its functions."
+
+next_workflow_step: "@sm executes *draft 4.2"
+
+suggested_command: "*draft 4.2"

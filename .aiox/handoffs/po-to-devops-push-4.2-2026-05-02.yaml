@@ -1,0 +1,113 @@
+from_agent: po
+to_agent: devops
+last_command: close-story
+story: "4.2"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.2.commission-calculation-on-completion.md"
+  story_id: "4.2"
+  story_title: "Commission Calculation on Service Completion"
+  story_status_at_handoff: "Done"
+  source_handoff: ".aiox/handoffs/qa-to-po-close-4.2-2026-05-02.yaml"
+  branch: "feature/4.2-commission-calculation-on-completion"
+  commits_ahead_of_main: 1
+  base: "main@55e8662"
+  qa_verdict: "PASS (clean — no rework needed)"
+  po_closure_option: "A — close as-is, register 4 LOW concerns"
+
+what_was_closed_locally_by_po:
+  - "Story 4.2 status: Ready for Review → Done"
+  - "Story Change Log: v0.4 (qa review) + v0.5 (po close) appended"
+  - "docs/qa/backlog.md: new Story 4.2 section with 4 LOW concerns; 4.1-DOC-001 + 4.1-TEST-001 marked DONE (carry-overs absorbed by 4.2); aggregate counts updated (31→33 open, 9→11 done)"
+  - "Memory project_sprint_state_post_HARD1.md updated to reflect 4.2 close + Epic 4 progress 2/4"
+
+key_difference_from_story_4_1_push:
+  - "ZERO schema changes — no migration to apply on softhair-prod"
+  - "No DEPLOY-001 equivalent gate"
+  - "Push → CI → merge → smoke (no migration step in between)"
+  - "Smoke test: mark a CONFIRMED appointment as COMPLETED on prod, verify Comissão Row appears in dialog"
+
+push_checklist:
+  - [ ] git status clean (uncommitted docs from close-story present)
+  - [ ] Stage closure docs (story 4.2 + backlog + gate file + 3 handoffs)
+  - [ ] Commit with docs(story-4.2) message + Co-Authored footer
+  - [ ] git push -u origin feature/4.2-commission-calculation-on-completion
+  - [ ] gh pr create with body highlighting PASS verdict + zero schema + 4 LOW concerns
+  - [ ] Wait for CI green (lint + typecheck + 77 vitest + e2e Chromium+Webkit + Lighthouse)
+  - [ ] gh pr merge --squash --delete-branch
+  - [ ] Smoke test prod (mark COMPLETED → verify commission display)
+  - [ ] Notify @sm to *draft 4.3 (or Founder decides next priority)
+
+quality_gates_already_passed:
+  - "lint clean (validated by @dev + re-validated by @qa)"
+  - "typecheck clean (validated x2)"
+  - "vitest 77/77 passing (63 baseline + 14 new)"
+  - "Next.js build success — all routes compile"
+  - "AC5 invariant: grep on production code (excluding tests) → 0 matches"
+
+ci_expectation:
+  - "5 specs HARD.1 baseline (Chromium + Webkit) should pass — no UI regressions"
+  - "Lighthouse CI gate (1.7-PERF-002 active) should pass — no perf regressions"
+  - "No new E2E for Story 4.2 (per WAIVER-E2E-4.2; tracked in 4.2-TEST-002)"
+  - "If CI fails, re-run; if persists, halt and analyze (regression risk should be near-zero given purely additive changes)"
+
+backlog_items_registered_during_close:
+  - id: "4.2-OBS-001"
+    priority: P2
+    severity: low
+    title: "Theoretical race: idempotent upsert + non-atomic appointments UPDATE"
+    owner: "@dev / @data-engineer"
+  - id: "4.2-TEST-001"
+    priority: P2
+    severity: low
+    title: "AC5 rejection-grade test is unit-level; real DB integration test deferred"
+    owner: "@dev / @qa"
+  - id: "4.2-TEST-002"
+    priority: P2
+    severity: low
+    title: "No E2E coverage for commission display in dialog"
+    owner: "@dev"
+  - id: "4.2-MNT-001"
+    priority: P2
+    severity: low
+    title: "Currency formatting inline in dialog (formatBrl extraction at 3rd usage)"
+    owner: "@dev"
+
+carry_overs_closed_by_4_2:
+  - id: "4.1-DOC-001"
+    closed_via: "Story 4.2 Task 5 (calculate.ts JSDoc fixed)"
+  - id: "4.1-TEST-001"
+    closed_via: "Story 4.2 Task 3 (14 vitest scenarios in agenda/actions.test.ts)"
+
+epic_context:
+  epic: "Epic 4 — Finance & Commission"
+  epic_progress: "2/4 stories done (4.1 ✅ MERGED, 4.2 ✅ closed pending push, 4.3/4.4 pending)"
+  epic_mvp_scope: "Stories 4.1–4.4 only (4.5–4.7 NFS-e deferred Phase 2)"
+  next_story_to_draft: "4.3 Monthly Commission Report"
+  next_story_dependencies:
+    - "Story 4.1 engine + schema — DONE ✅"
+    - "Story 4.2 commission_entries writer — DONE ✅ (will provide data for monthly aggregation)"
+    - "appointments.scheduled_at via JOIN per ADR-0004 amendment — DONE ✅"
+
+uncommitted_changes_to_commit_before_push:
+  - "docs/stories/4.2.commission-calculation-on-completion.md (status Done + Change Log v0.4 + v0.5 + QA Results)"
+  - "docs/qa/backlog.md (Story 4.2 section + 4 items + 2 carry-overs marked done + aggregate update)"
+  - "docs/qa/gates/4.2-commission-calculation-on-completion.yml (gate file)"
+  - ".aiox/handoffs/dev-to-qa-gate-4.2-2026-05-02.yaml (consumed:true)"
+  - ".aiox/handoffs/qa-to-po-close-4.2-2026-05-02.yaml (consumed:true)"
+  - ".aiox/handoffs/po-to-devops-push-4.2-2026-05-02.yaml (this file, consumed:false)"
+
+next_workflow_step: |
+  @devops runs *push 4.2:
+    1. Stage all post-implementation changes (docs/stories/4.2, docs/qa/*,
+       .aiox/handoffs/*)
+    2. Commit "docs(story-4.2): close + qa gate + backlog (Status: Done)"
+    3. Push branch + create PR (body: PASS verdict, zero schema, 4 LOW concerns)
+    4. Wait for CI green
+    5. Merge --squash --delete-branch
+    6. Smoke test prod (mark COMPLETED → verify Comissão Row)
+    7. Notify @sm to *draft 4.3 (or Founder decides next priority)
+
+suggested_command: "*push"

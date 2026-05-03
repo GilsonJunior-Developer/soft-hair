@@ -1,0 +1,121 @@
+from_agent: sm
+to_agent: po
+last_command: draft
+story: "4.2"
+timestamp: "2026-05-02T00:00:00Z"
+consumed: true
+
+context:
+  story_file: "docs/stories/4.2.commission-calculation-on-completion.md"
+  story_id: "4.2"
+  story_title: "Commission Calculation on Service Completion"
+  source_handoff: ".aiox/handoffs/devops-to-sm-draft-4.2-2026-05-02.yaml"
+  status_when_handed_off: "Draft"
+
+draft_summary: |
+  Engine consumer story (no new schema, no engine math). Single Server Action
+  extension (`transitionAppointmentStatus`) + dialog UI tweak + tests. Lower
+  complexity than 4.1 because all dependencies pre-existing. 7 tasks (1-2 core,
+  3-4 tests, 5-7 carry-over/optional).
+
+  Architectural decision documented: Server Action as writer (Option B), NOT
+  RPC extension or trigger (Option A). Rationale: engine stays in JS for
+  testability; AC5 immutability satisfied by pure-function engine + UNIQUE
+  constraint idempotency; failure mode (commission insert fails) is recoverable.
+
+self_check_against_story_draft_checklist:
+  result: READY
+  clarity_score: 9
+  partial_items:
+    - "AC5 multi-service interpretation flagged — SM picks 'test matrix' reading; @po confirms"
+  flags_for_po:
+    - id: "FLAG-WORKER-VS-ACTION"
+      severity: MEDIUM
+      desc: |
+        PRD AC1 says "worker calcula" — but project has no Inngest/queue infra
+        yet (would be Phase 2 territory). SM proposes synchronous Server Action
+        post-RPC. Justifications in Dev Notes (testability + AC5 invariant
+        unaffected + idempotency via UNIQUE constraint).
+
+        @po decision: approve Option B as drafted, OR insist on async worker
+        (would block 4.2 until queue infra added).
+
+        Recommendation: approve B. PRD's "worker" terminology was likely
+        planning vocab, not architectural mandate. AC1 user-visible contract
+        ("automatic, no manual input") is satisfied either way.
+
+    - id: "FLAG-AC5-MULTI-SERVICE"
+      severity: LOW
+      desc: |
+        PRD AC5 reads: "Testes unit cobrem: ... múltiplos serviços no mesmo
+        agendamento". Schema is 1:1 (appointments.service_id is single UUID).
+
+        SM interpretation: test against varied service TYPES (corte, coloração,
+        etc.), NOT one appointment with multiple services. Schema doesn't support
+        the latter and changing it is an epic-level concern.
+
+        @po decision: approve interpretation OR defer 4.2 until multi-service
+        schema exists.
+
+        Recommendation: approve. PRD likely intended "ensure engine handles
+        diverse service rates correctly", which the test matrix covers.
+
+    - id: "FLAG-CARRY-OVER-BUNDLING"
+      severity: LOW
+      desc: |
+        Story 4.2 Tasks 5+3.4 absorb 2 carry-over backlog items from 4.1:
+        - 4.1-DOC-001 (jsdoc fix, ~2 min) — Task 5
+        - 4.1-TEST-001 (action integration tests, ~30 min) — Task 3.4
+
+        Both are highly relevant (4.2 also adds a Server Action that needs
+        testing). 4.1-MNT-001 (DRY refactor of panel) stays separate.
+
+        @po decision: approve bundling OR strip them out and keep 4.2 focused.
+
+        Recommendation: approve bundling. Same testing harness, same domain.
+
+priority_validation_checks:
+  - "AC1 — confirm 'worker' interpretation as Server Action (Option B)"
+  - "AC2 — verify all 6 commission_entries fields are populated (snapshot pattern)"
+  - "AC3 — confirm display location (dialog vs card) — dialog is precedent for action buttons"
+  - "AC4 — discount handling via price_brl_final (NOT price_brl_original) — caller contract"
+  - "AC5 — test matrix coverage + rejection-grade immutability test (deferred from 4.1 to 4.2 per Story 4.1 gate)"
+
+resolved_during_drafting:
+  rpc_extension_strategy: |
+    Read existing transition_appointment_status RPC (migration 20260422000004).
+    State machine + reason patching is solid; extending in plpgsql would
+    duplicate JS engine. Decision: extend at Server Action layer instead.
+  engine_consumer_pattern: |
+    `apps/web/lib/commission/{resolve-rate,calculate}.ts` are pure functions
+    importable as `@/lib/commission/...`. Story 4.2 imports and consumes —
+    no new math, no duplication.
+  schema_state_verified: |
+    All needed columns exist:
+    - appointments.commission_calculated_brl (Story 1.1)
+    - appointments.price_brl_final (Story 1.1)
+    - commission_entries with snapshot fields + UNIQUE(appointment_id) (Story 1.1)
+    - professionals + services commission columns (Story 1.5/1.6)
+    - professional_service_commissions table (Story 4.1)
+    Zero new schema needed.
+
+prerequisites_called_out_in_story:
+  - "Read engine signatures from apps/web/lib/commission/ (no rewrites needed)"
+  - "Read existing actions.test.ts pattern in clientes/actions.test.ts (mock supabase precedent)"
+  - "Branch creation: feature/4.2-commission-calculation-on-completion (@sm OR @dev)"
+
+constitutional_compliance:
+  - "Article IV (No Invention): All scope traces to PRD Epic 4 lines 23-31 + ADR-0004 (Story 4.1)."
+  - "Authority: @sm drafted (allowed). Architectural decision (Option B) documented in Dev Notes; @po validates."
+  - "IDS Article IV-A: REUSE applied — engine 4.1 is canonical, NO duplication. ADAPT applied to existing transitionAppointmentStatus action. CREATE only the new tests."
+
+next_workflow_step: |
+  @po runs *validate-story-draft 4.2 with 10-point checklist + decides on
+  3 flags. Expected verdicts:
+
+  - GO with all 3 SM recommendations approved (Option B, multi-service test
+    matrix, carry-over bundling) → @sm or @dev create branch and proceed
+  - Modified GO if any flag overruled — light revisions to story
+  - NO-GO unlikely given draft completeness
+
+suggested_command: "*validate-story-draft 4.2"

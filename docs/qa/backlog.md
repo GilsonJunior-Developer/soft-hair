@@ -93,11 +93,24 @@ Gate: `docs/qa/gates/4.1-commission-rule-engine.yml` (CONCERNS — closed 2026-0
 |---|---|---|---|---|---|
 | 4.1-DEPLOY-001 | medium | P0 | open | Aplicar migration `20260502000000_story_4_1_professional_service_commissions` em **softhair-prod** (project_id `zqubqygagvtmvvljbstc`) ANTES do app deploy. Sequência: (1) apply migration via MCP/Dashboard SQL; (2) verify table + RLS policy + index; (3) merge PR; (4) Vercel deploys; (5) smoke test prod. Schema-additive (CREATE IF NOT EXISTS) → safe ahead of app code. **Bloqueia deploy, não merge.** | @devops + Founder |
 | 4.1-MNT-001 | medium | P1 | open | DRY: `commission-table-panel.tsx::resolveRowSource()` (linhas 38-56) duplica logic do canonical engine `lib/commission/resolve-rate.ts::resolveRate()`. Risco de divergência silenciosa. Refactor: refatorar panel pra usar `resolveRate()` direto. ~10 min. Quick-win antes de Story 4.2. | @dev |
-| 4.1-DOC-001 | low | P2 | open | JSDoc de `apps/web/lib/commission/calculate.ts` linhas 7-9 descreve math com escala errada (`amount_cents = round(price_brl * 100 * percent)` daria 100× o valor). Código (linhas 36-38) está correto — usa rounding de dois passos. Atualizar doc pra match. ~2 min; bundlear com 4.1-MNT-001. | @dev |
+| 4.1-DOC-001 | low | P2 | **done** | JSDoc de `apps/web/lib/commission/calculate.ts` linhas 7-9 descreve math com escala errada. **DONE 2026-05-02** via Story 4.2 Task 5 (carry-over absorbed) — JSDoc atualizado pro two-step rounding actually used. | @dev |
 | 4.1-SEC-001 | low | P2 | open | Server Actions `setCommissionTableEntry` + `bulkSetProfessionalServiceCommissions` sem role gating app-level. Qualquer salon member (incl. PROFESSIONAL) pode editar regras. Convention-consistent com Story 1.1 FOR ALL pattern. Hardening: adicionar `is_salon_owner_or_receptionist()` check — afeta a família toda de FOR ALL policies, melhor numa hardening pass dedicada. | @dev / @data-engineer |
-| 4.1-TEST-001 | low | P1 | open | Sem integration tests pras novas Server Actions. Engine tem 26 unit tests mas a action layer (Zod validation, Supabase client interaction, error paths) está descoberta. Precedent: `clientes/actions.test.ts` cobre `softDeleteClient` + `updateAppointmentNotes` com mock supabase. ~30 min. Recomendado antes de Story 4.2 (que depende dos contratos das actions). | @dev |
+| 4.1-TEST-001 | low | P1 | **done** | Sem integration tests pras novas Server Actions. **DONE 2026-05-02** via Story 4.2 Task 3 (carry-over absorbed) — 14 vitest scenarios em `agenda/actions.test.ts` cobrem o commission flow completo (precedence, AC4 discount, idempotency, failure modes, AC5 immutability). | @dev |
 | 4.1-TEST-002 | low | P2 | open | Sem E2E (Playwright) coverage pra matrix UI ou simulator. Story Dev Notes marcou como "non-blocking, recommended hygiene". Spec sugerida: `apps/web/e2e/commission-config.spec.ts` cobrindo simulator (qty + price + assert source label) + matrix expand + percent set + persist. ~1h; HARD.1 baseline já em place. | @dev |
 | 4.1-DATA-001 | low | P2 | open | Sem FK consistency check em `professional_service_commissions`: `salon_id == professional.salon_id == service.salon_id` não é enforced. RLS impede read cross-salon, mas teoricamente permite orphan rows na escrita. Theoretical, ~0 exploitability (requer multi-salon membership + UUIDs cross-salon). Optional: trigger ou app-side validation. | @data-engineer |
+
+---
+
+## Story 4.2 — Commission Calculation on Service Completion
+
+Gate: `docs/qa/gates/4.2-commission-calculation-on-completion.yml` (PASS — closed 2026-05-02 via Option A)
+
+| ID | Severity | Priority | Status | Título | Owner |
+|---|---|---|---|---|---|
+| 4.2-OBS-001 | low | P2 | open | Race teórica entre upsert idempotente + UPDATE não-atômico em `appointments.commission_calculated_brl`. Não-explorável via supported APIs (RPC `transition_appointment_status` tem `FOR UPDATE` row-lock + state machine bloqueia re-transition de COMPLETED). Optional hardening: extrair helper para DB transaction ou RPC se divergence aparecer em prod. | @dev / @data-engineer |
+| 4.2-TEST-001 | low | P2 | open | AC5 rejection-grade test é unit-level (mock supabase + behavioral via RPC rejection). Real DB integration test seria mais forte: usar pgtap ou `mcp__supabase__execute_sql` em vitest pra atualizar `professional.commission_default_percent` e re-query `commission_entries`. Diferida pra Phase 2 hardening. Mirrors Story 4.1's structural grep approach. | @dev / @qa |
+| 4.2-TEST-002 | low | P2 | open | Sem E2E (Playwright) coverage pra display de comissão em `AppointmentDetailDialog`. Story marca WAIVER-E2E-4.2. Bundleable com 4.1-TEST-002 (matrix + simulator E2E) num único hardening story. ~30 min pra spec: COMPLETED appointment → assert "Comissão" Row aparece. | @dev |
+| 4.2-MNT-001 | low | P2 | open | Currency formatting inline em `appointment-detail-dialog.tsx:102-109` (`.toFixed(2).replace('.', ',')`). Reuse `formatBrl` helper de `commission-simulator.tsx` no 3rd usage threshold (não atingido — 2 usos hoje). Bundleable com 4.1-MNT-001 (panel DRY) num "commission display helpers" cleanup quando Story 4.3 ou 4.4 trouxer 3rd usage. | @dev |
 
 ---
 
@@ -117,20 +130,20 @@ Gate: `docs/qa/gates/4.1-commission-rule-engine.yml` (CONCERNS — closed 2026-0
 
 | Categoria | Abertos | Escalated | Done | Total |
 |---|---|---|---|---|
-| TEST | 4 | 0 | 6 | 10 |
+| TEST | 5 | 0 | 7 | 12 |
 | PERF | 2 | 1 | 1 | 4 |
 | REQ | 4 | 0 | 0 | 4 |
-| MNT | 8 | 0 | 0 | 8 |
-| DOC | 2 | 0 | 0 | 2 |
+| MNT | 9 | 0 | 0 | 9 |
+| DOC | 1 | 0 | 1 | 2 |
 | SEC | 1 | 0 | 1 | 2 |
 | DATA | 2 | 0 | 0 | 2 |
 | A11Y | 4 | 0 | 0 | 4 |
-| OBS | 1 | 0 | 0 | 1 |
+| OBS | 2 | 0 | 0 | 2 |
 | TYPES | 1 | 0 | 0 | 1 |
 | VAL | 1 | 0 | 0 | 1 |
 | INFRA | 0 | 0 | 1 | 1 |
 | DEPLOY | 1 | 0 | 0 | 1 |
-| **Total** | **31** | **1** | **9** | **41** |
+| **Total** | **33** | **1** | **11** | **45** |
 
 ### Itens pareados (setup único resolve múltiplos)
 
@@ -155,8 +168,9 @@ Conjunto coeso pra um sprint único de hardening:
 - **4.1-DEPLOY-001** — apply migration to softhair-prod BEFORE app deploy. Schema-additive, low-risk. Bloqueia deploy do PR de Story 4.1 mas não merge.
 
 **P1 — próximo sprint geral:**
-- **4.1-MNT-001** + **4.1-DOC-001** — DRY refactor + JSDoc fix (~12 min combinado, quick-win antes de Story 4.2)
-- **4.1-TEST-001** — integration tests pras Server Actions de commission (recomendado antes de Story 4.2 que depende dos contratos)
+- ~~**4.1-DOC-001**~~ ✅ **DONE 2026-05-02** via Story 4.2 (carry-over absorbed)
+- ~~**4.1-TEST-001**~~ ✅ **DONE 2026-05-02** via Story 4.2 (carry-over absorbed)
+- **4.1-MNT-001** — DRY refactor (panel duplica engine logic). Bundleable com 4.2-MNT-001 num "commission display helpers" cleanup.
 - **2.4-PERF-001** — move email off critical path (pareia com o momento em que Resend for wired em prod)
 - **2.5-PERF-001** — view server-side pra aggregation quando salões cruzarem 5k clients (hoje o maior parceiro tem ~50, longe do threshold)
 - ~~**2.4-SEC-001**~~ ✅ **DONE 2026-04-25** — resolvido pela Story 2.7 + REVOKE FROM PUBLIC no DB (Quinn gate empiricamente verifica)
@@ -167,6 +181,7 @@ Conjunto coeso pra um sprint único de hardening:
 - 2.4-DATA-001, 2.4-A11Y-001, 2.4-A11Y-002, 2.4-OBS-001 — polimento pós-MVP
 - 2.5-TYPES-001, 2.5-A11Y-001, 2.5-MNT-001, 2.5-MNT-002, 2.5-VAL-001 — polimento Story 2.5 (types regen, aria-expanded refinement, setTimeout cleanup, branch cleanup, UUID pre-validation)
 - 4.1-SEC-001, 4.1-TEST-002, 4.1-DATA-001 — polimento Story 4.1 (role gating, E2E, FK consistency)
+- 4.2-OBS-001, 4.2-TEST-001, 4.2-TEST-002, 4.2-MNT-001 — polimento Story 4.2 (race teórica, AC5 integration test, E2E, formatBrl extraction)
 
 ---
 
