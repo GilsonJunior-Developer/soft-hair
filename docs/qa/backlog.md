@@ -108,7 +108,7 @@ Gate: `docs/qa/gates/4.2-commission-calculation-on-completion.yml` (PASS — clo
 | ID | Severity | Priority | Status | Título | Owner |
 |---|---|---|---|---|---|
 | 4.2-OBS-001 | low | P2 | open | Race teórica entre upsert idempotente + UPDATE não-atômico em `appointments.commission_calculated_brl`. Não-explorável via supported APIs (RPC `transition_appointment_status` tem `FOR UPDATE` row-lock + state machine bloqueia re-transition de COMPLETED). Optional hardening: extrair helper para DB transaction ou RPC se divergence aparecer em prod. | @dev / @data-engineer |
-| 4.2-TEST-001 | low | P2 | open | AC5 rejection-grade test é unit-level (mock supabase + behavioral via RPC rejection). Real DB integration test seria mais forte: usar pgtap ou `mcp__supabase__execute_sql` em vitest pra atualizar `professional.commission_default_percent` e re-query `commission_entries`. Diferida pra Phase 2 hardening. Mirrors Story 4.1's structural grep approach. | @dev / @qa |
+| 4.2-TEST-001 | medium | **P1** | open | **Promovido P2→P1 em 2026-05-03** após bug de PostgREST embed em prod (Story 4.2 hotfix PR #33). Mock-based tests não pegaram shape mismatch que o real DB integration test pegaria. Adicionar test que: (a) atualiza `professional.commission_default_percent` em DB real e re-query `commission_entries` pra verificar imutabilidade; (b) verifica engine consumer flow end-to-end com Supabase real (não mock) pra detectar PostgREST quirks antes de prod. Recomendado **antes de Story 4.3 mergear**. | @dev / @qa |
 | 4.2-TEST-002 | low | P2 | open | Sem E2E (Playwright) coverage pra display de comissão em `AppointmentDetailDialog`. Story marca WAIVER-E2E-4.2. Bundleable com 4.1-TEST-002 (matrix + simulator E2E) num único hardening story. ~30 min pra spec: COMPLETED appointment → assert "Comissão" Row aparece. | @dev |
 | 4.2-MNT-001 | low | P2 | open | Currency formatting inline em `appointment-detail-dialog.tsx:102-109` (`.toFixed(2).replace('.', ',')`). Reuse `formatBrl` helper de `commission-simulator.tsx` no 3rd usage threshold (não atingido — 2 usos hoje). Bundleable com 4.1-MNT-001 (panel DRY) num "commission display helpers" cleanup quando Story 4.3 ou 4.4 trouxer 3rd usage. | @dev |
 
@@ -130,7 +130,7 @@ Gate: `docs/qa/gates/4.2-commission-calculation-on-completion.yml` (PASS — clo
 
 | Categoria | Abertos | Escalated | Done | Total |
 |---|---|---|---|---|
-| TEST | 5 | 0 | 7 | 12 |
+| TEST | 5 (1 P1) | 0 | 7 | 12 |
 | PERF | 2 | 1 | 1 | 4 |
 | REQ | 4 | 0 | 0 | 4 |
 | MNT | 9 | 0 | 0 | 9 |
@@ -170,6 +170,7 @@ Conjunto coeso pra um sprint único de hardening:
 **P1 — próximo sprint geral:**
 - ~~**4.1-DOC-001**~~ ✅ **DONE 2026-05-02** via Story 4.2 (carry-over absorbed)
 - ~~**4.1-TEST-001**~~ ✅ **DONE 2026-05-02** via Story 4.2 (carry-over absorbed)
+- **4.2-TEST-001** — promovido P2→P1 em 2026-05-03 após bug PostgREST embed (PR #33 hotfix). **Recomendado antes de Story 4.3 mergear** — mock tests não pegaram a regressão. Real DB integration test via pgtap ou Supabase MCP `execute_sql` em vitest.
 - **4.1-MNT-001** — DRY refactor (panel duplica engine logic). Bundleable com 4.2-MNT-001 num "commission display helpers" cleanup.
 - **2.4-PERF-001** — move email off critical path (pareia com o momento em que Resend for wired em prod)
 - **2.5-PERF-001** — view server-side pra aggregation quando salões cruzarem 5k clients (hoje o maior parceiro tem ~50, longe do threshold)
